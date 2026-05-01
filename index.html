@@ -3922,7 +3922,7 @@ function emailFromData(data){
     <span style="font-size:11px;color:var(--faint);margin-left:8px">= 20分 total marks</span>
   </div>
 
-  ${coll('email-peel','PEEL框架参考','Opinion & Suggestion PEEL',buildPEELRef(),false,'参考 Reference')}
+  ${coll('email-peel','PEEL 模板参考','PEEL Templates',buildPEELRef(),false,'参考 Reference')}
 
   <h2 class="section-title">示范电邮 <span class="en">Anchor Model Email</span> <span class="pill p-teal" style="font-size:11px">完整示范 Full Model</span></h2>
   ${anchorBody}
@@ -4132,8 +4132,8 @@ function buildSuggestQFormats(){
 function buildPEELRef(){
   return `
   <div style="background:var(--teal-lt);padding:10px 12px;border-radius:var(--rsm);margin-bottom:14px;font-size:12px;color:var(--teal-dp);line-height:1.55">
-    <strong>三种 PEEL 框架 Three PEEL Frameworks:</strong><br>
-    <span style="color:var(--text)">① 意见 Opinion (Part A) — 议论文 / 公务电邮 Part A · ② 建议 Suggestion (Part B) — 公务电邮 Part B · ③ 经验 Experience (R-E-C-L) — 口试经验题 Oral Experience Q</span>
+    <strong>三种 PEEL 模板 Three PEEL Templates:</strong><br>
+    <span style="color:var(--text)">① 意见 Opinion (Part A) — 议论文 / 公务电邮 Part A · ② 建议 Suggestion (Part B) — 公务电邮 Part B · ③ 经验 Experience — 口试经验题 Oral Experience Q</span>
   </div>
 
   <div style="margin-bottom:14px">
@@ -4165,14 +4165,13 @@ function buildPEELRef(){
   </div>
 
   <div>
-    <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">③ 经验 R-E-C-L <span style="color:var(--faint);font-weight:400;font-style:italic">Experience R-E-C-L</span> <span class="badge bg-coral" style="font-size:10px">口试经验题 · Oral</span></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.55">口试经验题 <strong>不是PEEL</strong>，而是 R-E-C-L (Respond / Experience / Comment / Link)。<span style="color:var(--faint);font-style:italic">Oral experience questions follow R-E-C-L, not PEEL.</span></div>
+    <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">③ 经验 PEEL <span style="color:var(--faint);font-weight:400;font-style:italic">Experience PEEL</span> <span class="badge bg-coral" style="font-size:10px">口试经验题 · Oral</span></div>
     ${peelBlock([
-      peelRow("pl-r","R","回应 Respond",
+      peelRow("pl-rec-p","P","回应 Respond",
         "<ul style='margin:0;padding-left:18px;line-height:1.75'><li>直接回应问题<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>Directly respond to the question</span></li><li>有的，我曾经…… / 没有，我从来没有……<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>\"Yes, I once…\" / \"No, I have never…\"</span></li></ul>",""),
-      peelRow("pl-rec-e","E","经历 Experience",
+      peelRow("pl-rec-e1","E","经历 Experience",
         "<ul style='margin:0;padding-left:18px;line-height:1.75'><li>叙述具体经历<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>Recount the specific experience</span></li><li>记得有一次…… / 那是在……的时候<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>\"I remember once…\" / \"It was during…\"</span></li><li>包含 时间 / 地点 / 人物 / 经过<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>Include when / where / who / what happened</span></li></ul>",""),
-      peelRow("pl-rec-c","C","感受 Comment",
+      peelRow("pl-rec-e2","E","感受 Comment",
         "<ul style='margin:0;padding-left:18px;line-height:1.75'><li>分享当时的感受或想法<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>Share your feelings or thoughts at the time</span></li><li>当时我感到…… / 我觉得……<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>\"At that time I felt…\" / \"I thought…\"</span></li></ul>",""),
       peelRow("pl-rec-l","L","总结 Link",
         "<ul style='margin:0;padding-left:18px;line-height:1.75'><li>说明这次经验给你的启发<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>State the lesson or insight gained</span></li><li>这次经验让我明白…… / 从此以后，我懂得……<span style='color:var(--faint);font-style:italic;display:block;font-size:11px'>\"This experience taught me…\" / \"From then on, I understood…\"</span></li></ul>",""),
@@ -4233,44 +4232,50 @@ function buildEssayFramework(){
          "用一个真实或虚构的小故事开篇",
          "Open with a real or fictional short story",
          "凌晨两点，小俊还躺在床上，唯一的光来自他的手机屏幕。原本计划十一点睡觉，可一打开 Instagram，时间就这样溜走了。",
+         "It is 2 a.m., and Xiaojun lies in bed with his only light coming from a phone screen. He had planned to sleep at eleven — but the moment he opened Instagram, the hours simply slipped away.",
          "用画面感与情节吸引读者，让抽象议题变得具体可感",
          "Hooks readers with imagery and plot, making abstract issues concrete"],
         ["名言 Quote",
          "引用名人名言、谚语或权威话语",
          "Cite a famous saying, proverb, or authority",
          "孔子曾说：「学而不思则罔。」在AI唾手可得的今天，这句话的分量比任何时候都更重。",
+         "Confucius once said, \"Learning without thinking is futile.\" In an age when AI is at our fingertips, his words carry more weight than ever.",
          "借助权威话语为论点定调，提升文章的厚度与说服力",
          "Borrows authority to set the tone, lending depth and credibility"],
         ["比较 Comparison",
          "把两种事物或情况并列对照",
          "Place two things or situations side by side",
          "上一代少年放学后到组屋楼下踢球；这一代少年放学后躲进房里刷短视频——同样的青春，却走向截然不同的成长。",
+         "The last generation of teens kicked footballs at the foot of HDB blocks after school; this generation hides in their rooms scrolling short videos — the same youth, taking utterly different paths.",
          "凸显差异，让读者立刻看到论题的核心冲突",
          "Spotlights differences, surfacing the core conflict at a glance"],
         ["定义 Definition",
          "先界定关键词或核心概念",
          "Define a key term or central concept upfront",
          "何谓「自律」？是无人监督时仍能管住自己——而当全世界都在比谁刷得更久，自律便成了少年最稀缺的能力。",
+         "What is \"self-discipline\"? It is restraining oneself when no one is watching — and when the whole world competes over who can scroll the longest, self-discipline becomes a youth's rarest skill.",
          "为讨论奠定共同基础，避免读者对核心词汇产生误解",
          "Lays a shared foundation so readers don't misread the key term"],
         ["逻辑 Logic",
          "从一个普遍前提推出讨论焦点",
          "Reason from a general premise into the focus question",
          "凡是过于依赖外力的事物，最终都会失去自我成长的能力。当学生连写作都交给AI时，他们失去的，远不止是作文分数。",
+         "Whatever leans too heavily on external force eventually loses the power to grow on its own. When students hand even their writing to AI, what they lose is far more than composition marks.",
          "用清晰的推理引导读者，使立场显得理所当然",
          "Guides readers via clean reasoning, making the stand feel inevitable"],
         ["趋势 Trend",
          "用近期数据或现象勾勒大背景",
          "Sketch the bigger picture with recent data or trends",
          "据 HSA 公布，2025 年首八个月，我国已侦察到近一万起电子烟案件——平均每天有 41 名青少年误踏这片黑色烟雾。",
+         "According to HSA, in the first eight months of 2025 Singapore detected nearly 10,000 vape-related cases — on average 41 youths a day stepping into that black mist.",
          "让读者意识到议题的迫切性，营造「此事不容忽视」的紧迫感",
          "Conveys urgency, creating the sense that \"this cannot be ignored\""],
       ].map(h=>`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rsm);padding:12px 14px">
         <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">${h[0]}</div>
         <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-bottom:3px">${h[1]}</div>
         <div style="font-size:10px;color:var(--faint);font-style:italic;line-height:1.5;margin-bottom:6px">${h[2]}</div>
-        <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:6px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${h[3]}</div>
-        <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:6px 8px;border-radius:4px"><strong>作用 Purpose：</strong>${h[4]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${h[5]}</span></div>
+        <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:6px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${h[3]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:3px;font-size:10px">${h[4]}</span></div>
+        <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:6px 8px;border-radius:4px"><strong>作用 Purpose：</strong>${h[5]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${h[6]}</span></div>
       </div>`).join('')}
     </div>
   </div>
@@ -4321,54 +4326,54 @@ function buildTechRef(){
   <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:8px">修辞手法 <span style="color:var(--faint);font-weight:400;font-style:italic">Rhetorical Devices (2-character terms)</span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
     ${[
-      ["比喻","Metaphor","把A比作B，让描写更生动","A is compared to B for vividness","学习就像爬山，一步一脚印才能抵达山顶。","让描写生动形象，画面感更强","Makes description vivid with stronger imagery"],
-      ["拟人","Personification","把事物当作人来描写，赋予人的情感与动作","Treats objects as if human, giving them feelings or actions","屏幕一闪一闪，仿佛在向他招手。","让描写更生动有趣，让事物充满生命力","Adds liveliness, giving the scene a sense of life"],
-      ["排比","Parallelism","三个或以上结构相似的句子","Three+ parallel structures for emphasis","它不会替学生写作文、不会替学生思考、不会替学生成长。","加强气势与节奏感，使论点更有力","Adds momentum and rhythm, strengthening the argument"],
-      ["反问","Rhetorical Q","用问句表达强烈肯定／否定","Question expressing strong view","如果连基本思考都交给机器，教育还有什么意义呢？","加强语气，使读者不得不深思","Intensifies tone, forcing readers to reflect"],
-      ["夸张","Hyperbole","故意把事情夸大或缩小","Deliberately exaggerates or understates","他刷视频刷到天昏地暗，连饭都忘了吃。","让感受更鲜明，加强情绪感染力","Makes feelings vivid and emotionally compelling"],
-      ["对偶","Antithesis","用结构相对、字数相同的两句相对","Two phrases of equal length with contrasting structure","屏幕一亮，眼神就暗。","让句子工整有力，对比鲜明","Makes the line balanced and the contrast striking"],
-      ["设问","Self Q&A","作者自问自答，引起读者注意","Author poses a question and answers it, drawing attention","什么才是真正的成长？是不被同伴的声音淹没。","引发思考，让论述更有层次","Engages thought; gives the argument depth"],
-      ["反复","Repetition","重复使用相同的字、词、句","Repeats the same word, phrase or sentence","拒绝、拒绝、再拒绝——这是少年最该学会的力量。","加强情绪与气势，让重点深入人心","Reinforces emotion and momentum, making the point unforgettable"],
+      ["比喻","Metaphor","把A比作B，让描写更生动","A is compared to B for vividness","学习就像爬山，一步一脚印才能抵达山顶。","Learning is like climbing a mountain — only step by step do we reach the peak.","让描写生动形象，画面感更强","Makes description vivid with stronger imagery"],
+      ["拟人","Personification","把事物当作人来描写，赋予人的情感与动作","Treats objects as if human, giving them feelings or actions","屏幕一闪一闪，仿佛在向他招手。","The screen kept flashing, as if beckoning him over.","让描写更生动有趣，让事物充满生命力","Adds liveliness, giving the scene a sense of life"],
+      ["排比","Parallelism","三个或以上结构相似的句子","Three+ parallel structures for emphasis","它不会替学生写作文、不会替学生思考、不会替学生成长。","It will not write the essay for the student, will not think for the student, will not grow for the student.","加强气势与节奏感，使论点更有力","Adds momentum and rhythm, strengthening the argument"],
+      ["反问","Rhetorical Q","用问句表达强烈肯定／否定","Question expressing strong view","如果连基本思考都交给机器，教育还有什么意义呢？","If even basic thinking is handed over to machines, what meaning does education still have?","加强语气，使读者不得不深思","Intensifies tone, forcing readers to reflect"],
+      ["夸张","Hyperbole","故意把事情夸大或缩小","Deliberately exaggerates or understates","他刷视频刷到天昏地暗，连饭都忘了吃。","He scrolled videos until the world went dark — he even forgot to eat.","让感受更鲜明，加强情绪感染力","Makes feelings vivid and emotionally compelling"],
+      ["对偶","Antithesis","用结构相对、字数相同的两句相对","Two phrases of equal length with contrasting structure","屏幕一亮，眼神就暗。","The screen brightens; the eyes dim.","让句子工整有力，对比鲜明","Makes the line balanced and the contrast striking"],
+      ["设问","Self Q&A","作者自问自答，引起读者注意","Author poses a question and answers it, drawing attention","什么才是真正的成长？是不被同伴的声音淹没。","What is true growth? It is not letting peers' voices drown out your own.","引发思考，让论述更有层次","Engages thought; gives the argument depth"],
+      ["反复","Repetition","重复使用相同的字、词、句","Repeats the same word, phrase or sentence","拒绝、拒绝、再拒绝——这是少年最该学会的力量。","Refuse, refuse, refuse again — this is the strength every youth should learn.","加强情绪与气势，让重点深入人心","Reinforces emotion and momentum, making the point unforgettable"],
     ].map(t=>`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px">
       <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">${t[0]} <span style="font-size:10px;color:var(--faint);font-weight:400;font-style:italic">${t[1]}</span></div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:3px">${t[2]}</div>
       <div style="font-size:10px;color:var(--faint);font-style:italic;line-height:1.5;margin-bottom:4px">${t[3]}</div>
-      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}</div>
-      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>效果 Effect：</strong>${t[5]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[6]}</span></div>
+      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:3px;font-size:10px">${t[5]}</span></div>
+      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>作用 Purpose：</strong>${t[6]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[7]}</span></div>
     </div>`).join('')}
   </div>
 
   <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:8px">人物描写 <span style="color:var(--faint);font-weight:400;font-style:italic">Character Description (4-character terms)</span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
     ${[
-      ["外貌描写","Appearance","描述人物的外表、衣着、长相","Describes a character's appearance, clothing or features","他原本明亮的双眼，如今布满血丝、深陷黯淡。","让人物形象具体可见，反映其心理或处境","Makes the character vivid, reflecting their state or circumstances"],
-      ["语言描写","Speech","记录人物说的话或对白","Records what a character says or dialogue","「我只是想睡饱一次。」他低声说。","直接展现人物的想法与个性","Directly reveals the character's thoughts and personality"],
-      ["动作描写","Action","刻画人物的具体动作","Depicts specific physical actions of a character","他放下手机，深深地吸了一口气，关上灯。","让情节具体生动，体现人物的决心或转变","Makes the scene concrete; shows resolve or change"],
-      ["心理描写","Inner Thought","写出人物内心的想法、感受","Reveals the character's inner thoughts or feelings","他知道自己应该睡了，但手指仿佛不受控制。","深入展现人物挣扎，让读者产生共鸣","Reveals inner struggle; resonates with readers"],
-      ["神态描写","Demeanour","描写人物的表情、神情、姿态","Describes a character's facial expression, demeanour or posture","她皱起眉头，嘴角微微下垂，眼神空洞。","透过表情透露人物情绪，让画面更细腻","Reveals emotion through expression, deepening the scene"],
+      ["外貌描写","Appearance","描述人物的外表、衣着、长相","Describes a character's appearance, clothing or features","他原本明亮的双眼，如今布满血丝、深陷黯淡。","His once-bright eyes were now bloodshot and sunken, drained of light.","让人物形象具体可见，反映其心理或处境","Makes the character vivid, reflecting their state or circumstances"],
+      ["语言描写","Speech","记录人物说的话或对白","Records what a character says or dialogue","「我只是想睡饱一次。」他低声说。","\"I just want one good night's sleep,\" he said quietly.","直接展现人物的想法与个性","Directly reveals the character's thoughts and personality"],
+      ["动作描写","Action","刻画人物的具体动作","Depicts specific physical actions of a character","他放下手机，深深地吸了一口气，关上灯。","He set down the phone, took a deep breath, and switched off the light.","让情节具体生动，体现人物的决心或转变","Makes the scene concrete; shows resolve or change"],
+      ["心理描写","Inner Thought","写出人物内心的想法、感受","Reveals the character's inner thoughts or feelings","他知道自己应该睡了，但手指仿佛不受控制。","He knew he should sleep — but his fingers seemed beyond his control.","深入展现人物挣扎，让读者产生共鸣","Reveals inner struggle; resonates with readers"],
+      ["神态描写","Demeanour","描写人物的表情、神情、姿态","Describes a character's facial expression, demeanour or posture","她皱起眉头，嘴角微微下垂，眼神空洞。","She furrowed her brow, the corners of her mouth drooped slightly, her eyes empty.","透过表情透露人物情绪，让画面更细腻","Reveals emotion through expression, deepening the scene"],
     ].map(t=>`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px">
       <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">${t[0]} <span style="font-size:10px;color:var(--faint);font-weight:400;font-style:italic">${t[1]}</span></div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:3px">${t[2]}</div>
       <div style="font-size:10px;color:var(--faint);font-style:italic;line-height:1.5;margin-bottom:4px">${t[3]}</div>
-      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}</div>
-      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>效果 Effect：</strong>${t[5]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[6]}</span></div>
+      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:3px;font-size:10px">${t[5]}</span></div>
+      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>作用 Purpose：</strong>${t[6]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[7]}</span></div>
     </div>`).join('')}
   </div>
 
   <div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:8px">论证方法 <span style="color:var(--faint);font-weight:400;font-style:italic">Argumentation Methods (5-character terms)</span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
     ${[
-      ["举例论证法","Exemplification","用具体例子证明论点","Uses specific examples to prove the argument","这种情况并不罕见——我的朋友从前能独立解题，如今连基础题也得依靠工具。","用真实案例让论点站得住脚，增强说服力","Anchors the argument in real cases, boosting persuasiveness"],
-      ["对比论证法","Contrast","把正反两面或不同情况对比","Contrasts opposing situations to highlight the argument","依赖工具的学生遇题便求助屏幕；反之，独立思考的学生能从错误中摸索新方法。","让正反两面的差异鲜明，使论点更突出","Makes opposing sides stand out, sharpening the point"],
-      ["比喻论证法","Analogy","用熟悉的事物比拟陌生的论点","Uses familiar imagery to make an argument relatable","AI就像一把双刃剑，既方便学习，也可能伤害独立思考。","把抽象概念转化为具体意象，让论点易懂","Translates abstract ideas into vivid imagery, easing understanding"],
-      ["引用论证法","Quotation","引用名人名言、权威研究或数据","Cites authorities, research or data","正如教育部调查显示：「新加坡学生的数码工具使用率已居全球前列。」","借助权威来源，让论点更具说服力","Borrows authority to lend weight to the argument"],
-      ["道理论证法","Reasoning","用普遍接受的道理或常识推理","Uses widely accepted principles or logic","凡是过于依赖外力的事物，最终都会失去自我成长的能力。","让论点回归基本道理，使读者难以反驳","Grounds the argument in fundamentals, making it hard to refute"],
+      ["举例论证法","Exemplification","用具体例子证明论点","Uses specific examples to prove the argument","这种情况并不罕见——我的朋友从前能独立解题，如今连基础题也得依靠工具。","This is hardly rare — a friend of mine used to solve problems on his own, and now even basic ones require tools.","用真实案例让论点站得住脚，增强说服力","Anchors the argument in real cases, boosting persuasiveness"],
+      ["对比论证法","Contrast","把正反两面或不同情况对比","Contrasts opposing situations to highlight the argument","依赖工具的学生遇题便求助屏幕；反之，独立思考的学生能从错误中摸索新方法。","Tool-reliant students turn to a screen at every problem; independent thinkers, by contrast, find new methods through their mistakes.","让正反两面的差异鲜明，使论点更突出","Makes opposing sides stand out, sharpening the point"],
+      ["比喻论证法","Analogy","用熟悉的事物比拟陌生的论点","Uses familiar imagery to make an argument relatable","AI就像一把双刃剑，既方便学习，也可能伤害独立思考。","AI is like a double-edged sword — it eases learning, but it can also wound independent thinking.","把抽象概念转化为具体意象，让论点易懂","Translates abstract ideas into vivid imagery, easing understanding"],
+      ["引用论证法","Quotation","引用名人名言、权威研究或数据","Cites authorities, research or data","正如教育部调查显示：「新加坡学生的数码工具使用率已居全球前列。」","As a Ministry of Education survey shows: \"Singapore students' use of digital tools ranks among the highest in the world.\"","借助权威来源，让论点更具说服力","Borrows authority to lend weight to the argument"],
+      ["道理论证法","Reasoning","用普遍接受的道理或常识推理","Uses widely accepted principles or logic","凡是过于依赖外力的事物，最终都会失去自我成长的能力。","Whatever leans too heavily on external force eventually loses the power to grow on its own.","让论点回归基本道理，使读者难以反驳","Grounds the argument in fundamentals, making it hard to refute"],
     ].map(t=>`<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px">
       <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">${t[0]} <span style="font-size:10px;color:var(--faint);font-weight:400;font-style:italic">${t[1]}</span></div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:3px">${t[2]}</div>
       <div style="font-size:10px;color:var(--faint);font-style:italic;line-height:1.5;margin-bottom:4px">${t[3]}</div>
-      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}</div>
-      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>效果 Effect：</strong>${t[5]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[6]}</span></div>
+      <div style="font-size:11px;color:var(--amber-dk);line-height:1.55;background:var(--amber-lt);padding:5px 8px;border-radius:4px;margin-bottom:4px"><strong>例 E.g.：</strong>${t[4]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:3px;font-size:10px">${t[5]}</span></div>
+      <div style="font-size:11px;color:var(--teal-dp);line-height:1.55;background:var(--teal-lt);padding:5px 8px;border-radius:4px"><strong>作用 Purpose：</strong>${t[6]}<span style="display:block;font-style:italic;color:var(--faint);margin-top:2px">${t[7]}</span></div>
     </div>`).join('')}
   </div>
 
@@ -4907,7 +4912,7 @@ ${fullModel1En.join('\n\n')}</div></div>
   </div>
 
   ${coll('email-struct','公务电邮8部分结构','8-Part Email Structure',structTable,false,'参考 Reference')}
-  ${coll('email-peel','PEEL框架参考','Opinion & Suggestion PEEL',peelRefContent,false,'参考 Reference')}
+  ${coll('email-peel','PEEL 模板参考','PEEL Templates',peelRefContent,false,'参考 Reference')}
 
   <hr class="divider">
 
@@ -5176,32 +5181,32 @@ function essayHTML(){
   <hr class="divider">
 
   <h2 class="section-title">示范议论文 <span class="en">Model Essay</span></h2>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">引论和结论常驻显示，本论三段可展开研究。Opening and conclusion stay visible; body paragraphs are collapsible for focused study.</p>
-
-  <h2 class="section-title">引论 <span class="en">Opening</span></h2>
-  ${openingHTML}
-
-  <h2 class="section-title">本论 <span class="en">Body</span> <span class="badge bg-gray" style="font-size:10px">不完全同意 · 1同意 + 2不同意</span></h2>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
-    <div style="font-size:13px;font-weight:500;color:var(--text)">本论三段 Body Paragraphs</div>
-    <button class="btn-pill" onclick="toggleAllEssayBodies(this)" style="font-size:11px">展开全部 Expand All</button>
-  </div>
-  <div id="essay-bodies">
-  ${coll('body-p1','段落一 · 诚然……（同意）— AI能承担部分教学功能','Para 1 · Agree — AI can take on some teaching functions',bodyPara1,false)}
-  ${coll('body-p2','段落二 · 不同意 — 情感支持无法取代','Para 2 · Disagree — emotional support cannot be replaced',bodyPara2,false)}
-  ${coll('body-p3','段落三 · 不同意 — 品格培养不可取代','Para 3 · Disagree — character development irreplaceable',bodyPara3,false)}
-  </div>
-
-  <h2 class="section-title">结论 <span class="en">Conclusion</span></h2>
-  ${conclusionHTML}
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">在四种视图之间切换：PEEL注解、完整中文、英文翻译、中英对照。<br><span style="color:var(--faint);font-style:italic">Switch between four views: PEEL Annotated, Full Chinese, English, and Bilingual.</span></p>
 
   <div class="view-switcher" style="margin-top:14px;margin-bottom:14px">
     <div style="display:flex;gap:4px;padding:3px;background:var(--g100);border-radius:var(--r);margin-bottom:10px;overflow-x:auto">
-      <button class="vs-btn vs-active" onclick="switchModelView('essay',this,'full-zh')">完整文章 <span style="opacity:.6;font-weight:400">· Full Chinese</span></button>
+      <button class="vs-btn vs-active" onclick="switchModelView('essay',this,'annotated')">PEEL注解 <span style="opacity:.6;font-weight:400">· PEEL Annotated</span></button>
+      <button class="vs-btn" onclick="switchModelView('essay',this,'full-zh')">完整中文 <span style="opacity:.6;font-weight:400">· Full Chinese</span></button>
       <button class="vs-btn" onclick="switchModelView('essay',this,'full-en')">英文翻译 <span style="opacity:.6;font-weight:400">· English</span></button>
       <button class="vs-btn" onclick="switchModelView('essay',this,'bilingual')">中英对照 <span style="opacity:.6;font-weight:400">· Bilingual</span></button>
     </div>
-    <div class="vs-content vs-full-zh" style="display:block">${fullEssayZh}</div>
+    <div class="vs-content vs-annotated" style="display:block">
+      <h2 class="section-title" style="margin-top:8px">引论 <span class="en">Opening</span></h2>
+      ${openingHTML}
+      <h2 class="section-title">本论 <span class="en">Body</span> <span class="badge bg-gray" style="font-size:10px">不完全同意 · 1同意 + 2不同意</span></h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:500;color:var(--text)">本论三段 Body Paragraphs</div>
+        <button class="btn-pill" onclick="toggleAllEssayBodies(this)" style="font-size:11px">展开全部 Expand All</button>
+      </div>
+      <div id="essay-bodies">
+      ${coll('body-p1','段落一 · 诚然……（同意）— AI能承担部分教学功能','Para 1 · Agree — AI can take on some teaching functions',bodyPara1,false)}
+      ${coll('body-p2','段落二 · 不同意 — 情感支持无法取代','Para 2 · Disagree — emotional support cannot be replaced',bodyPara2,false)}
+      ${coll('body-p3','段落三 · 不同意 — 品格培养不可取代','Para 3 · Disagree — character development irreplaceable',bodyPara3,false)}
+      </div>
+      <h2 class="section-title">结论 <span class="en">Conclusion</span></h2>
+      ${conclusionHTML}
+    </div>
+    <div class="vs-content vs-full-zh" style="display:none">${fullEssayZh}</div>
     <div class="vs-content vs-full-en" style="display:none">${fullEssayEn}</div>
     <div class="vs-content vs-bilingual" style="display:none">${bilingualView(essayZhParas, essayEnParas)}</div>
   </div>
