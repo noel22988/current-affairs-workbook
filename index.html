@@ -347,6 +347,7 @@ body.nopy .zh-para{line-height:1.9;padding-top:0}
 .cover-hero-label{font-size:15px;font-weight:500;color:var(--teal-dp);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}
 .cover-hero-title{font-size:30px;font-weight:600;color:var(--text);line-height:1.25;margin-bottom:4px}
 .cover-hero-titleen{font-size:19px;color:var(--muted);font-style:italic;margin-bottom:14px}
+.cover-hero-subtitle-zh{font-size:19px;color:var(--text);line-height:1.5;margin-bottom:6px}
 .cover-hero-desc{font-size:17px;color:var(--muted);line-height:1.65;max-width:560px;margin:0 auto 18px}
 .cover-hero-stats{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
 .cover-stat{font-size:16px;color:var(--muted);padding:6px 14px;background:#fff;border:1px solid var(--border);border-radius:999px}
@@ -464,6 +465,42 @@ kbd{display:inline-block;padding:1px 6px;font-size:15px;font-family:ui-monospace
 .py-toggle-hdr.py-failed{color:var(--coral-dk,#9c3617);border-color:var(--coral-lt,#fdebe4);background:#fff;cursor:help}
 .py-toggle-hdr.py-failed input{display:none}
 
+/* English content toggle — hides English-language content when body.hide-en is set */
+body.hide-en .en,
+body.hide-en .en-para,
+body.hide-en .en-col,
+body.hide-en .en-line,
+body.hide-en .bi-en,
+body.hide-en .cmp-label.cmp-label-ref,
+body.hide-en .coll-title-en,
+body.hide-en .cover-hero-titleen,
+body.hide-en .ctx-hero-en,
+body.hide-en .ctx-stat-en,
+body.hide-en .dec-strategy-en,
+body.hide-en .model-ans-en,
+body.hide-en .nxt-title-en,
+body.hide-en .onboard-step-en,
+body.hide-en .onboard-title-en,
+body.hide-en .persp-en,
+body.hide-en .pq-q-en,
+body.hide-en .pt-en,
+body.hide-en .q-context-en,
+body.hide-en .q-instruction-en,
+body.hide-en .q-type-desc-en,
+body.hide-en .qt-kw-en,
+body.hide-en .s-con-en,
+body.hide-en .sg-item-en,
+body.hide-en .slabel-en,
+body.hide-en .starter-en,
+body.hide-en .tbl-row-en,
+body.hide-en .v-en,
+body.hide-en .zh-en,
+body.hide-en .model-ans-en,
+body.hide-en [data-en]{display:none !important}
+/* Italic-styled English bits (inline-styled paragraphs/divs) */
+body.hide-en .hdr-s[style*="italic"],
+body.hide-en .hdr-t + .hdr-t{display:none !important}
+
 /* V4: Non-italic English in long body translations (keep italic on short labels) */
 .model-ans-en, .en-para, .bi-en-cell{font-style:normal !important}
 
@@ -497,6 +534,10 @@ kbd{display:inline-block;padding:1px 6px;font-size:15px;font-family:ui-monospace
       <label class="py-toggle-hdr" title="切换汉语拼音 Toggle Pinyin">
         <input type="checkbox" id="pyGlobal" checked onchange="toggleGlobalPY()">
         <span>拼音 Pinyin</span>
+      </label>
+      <label class="py-toggle-hdr" title="切换英文显示 Toggle English">
+        <input type="checkbox" id="enGlobal" checked onchange="toggleGlobalEN()">
+        <span>英文 English</span>
       </label>
       <button class="py-toggle-hdr" onclick="exportAnswers()" title="导出答案 Export answers as text file" style="background:#fff">
         <span>⬇ 导出 Export</span>
@@ -1073,6 +1114,18 @@ function togglePY(){
 
 function toggleGlobalPY(){togglePY();}
 
+function toggleGlobalEN(){
+  const cb = document.getElementById('enGlobal');
+  const showEN = cb ? cb.checked : true;
+  if(showEN){
+    document.body.classList.remove('hide-en');
+    try{ localStorage.setItem('zb_show_en', '1'); }catch(e){}
+  } else {
+    document.body.classList.add('hide-en');
+    try{ localStorage.setItem('zb_show_en', '0'); }catch(e){}
+  }
+}
+
 function togglePQ(id){
   const el=document.getElementById('pq-'+id);
   const btn=document.getElementById('pqb-'+id);
@@ -1135,6 +1188,15 @@ function onAnsInput(id,el){saveAns(id,el.value); autoGrowAnsField(el);}
 window.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('.ans-field').forEach(autoGrowAnsField);
   if(typeof autoCalcMarks === 'function') autoCalcMarks();
+  // Restore English visibility preference
+  try {
+    const savedEN = localStorage.getItem('zb_show_en');
+    if(savedEN === '0'){
+      document.body.classList.add('hide-en');
+      const cb = document.getElementById('enGlobal');
+      if(cb) cb.checked = false;
+    }
+  } catch(e){}
 });
 // Also re-grow when tab is switched (since tabs may be display:none initially)
 document.addEventListener('click',function(e){
@@ -2388,9 +2450,12 @@ const TOPIC_CONTENT = {
     oral: {
       // 5 practice questions; Q1-3 full models; Q4-5 scaffolds
       keywordTable: [
-        ["你认为…吗？／你同意…吗？", "Do you think… / Do you agree…", "op", "意见题 Opinion"],
-        ["你可以如何…？／应该如何…？", "How can you… / How should we…", "sg", "建议题 Suggestion"],
-        ["你有没有…的经历？／分享一次…", "Have you ever… / Share a time…", "ex", "经验题 Experience"]
+        ["你有没有… / 你曾经…", "Have you ever… / Have you had…", "ex", "经验 Experience"],
+        ["你喜不喜欢… / 你会不会…", "Do you like… / Would you…", "op", "意见 Opinion"],
+        ["你同意吗？请谈谈看法。", "Do you agree? Share your views.", "op", "意见 Opinion"],
+        ["如果你是录像中的…，你会怎么做？", "If you were the person in the video, what would you do?", "sg", "建议 Suggestion"],
+        ["如果你是录像中的…，你会有什么感受？", "If you were in the video, how would you feel?", "op", "意见 Opinion"],
+        ["你认为（…）可以如何……？", "How do you think (…) can…?", "sg", "建议 Suggestion"]
       ],
       questions: [
         {
@@ -3559,9 +3624,12 @@ const TOPIC_CONTENT = {
     },
     oral: {
       keywordTable: [
-        ["你认为…吗？／你同意…吗？", "Do you think… / Do you agree…", "op", "意见题 Opinion"],
-        ["你可以如何…？／应该如何…？", "How can you… / How should we…", "sg", "建议题 Suggestion"],
-        ["你有没有…的经历？／分享一次…", "Have you ever… / Share a time…", "ex", "经验题 Experience"]
+        ["你有没有… / 你曾经…", "Have you ever… / Have you had…", "ex", "经验 Experience"],
+        ["你喜不喜欢… / 你会不会…", "Do you like… / Would you…", "op", "意见 Opinion"],
+        ["你同意吗？请谈谈看法。", "Do you agree? Share your views.", "op", "意见 Opinion"],
+        ["如果你是录像中的…，你会怎么做？", "If you were the person in the video, what would you do?", "sg", "建议 Suggestion"],
+        ["如果你是录像中的…，你会有什么感受？", "If you were in the video, how would you feel?", "op", "意见 Opinion"],
+        ["你认为（…）可以如何……？", "How do you think (…) can…?", "sg", "建议 Suggestion"]
       ],
       questions: [
         {
@@ -3758,6 +3826,121 @@ const TOPIC_CONTENT = {
             ["扎根社区", "zhā gēn shè qū", "rooted in the community"],
             ["世代相传", "shì dài xiāng chuán", "passed down through generations"],
           ]
+        }
+      ]
+    },
+    oral: {
+      keywordTable: [
+        ["你有没有… / 你曾经…", "Have you ever… / Have you had…", "ex", "经验 Experience"],
+        ["你喜不喜欢… / 你会不会…", "Do you like… / Would you…", "op", "意见 Opinion"],
+        ["你同意吗？请谈谈看法。", "Do you agree? Share your views.", "op", "意见 Opinion"],
+        ["如果你是录像中的…，你会怎么做？", "If you were the person in the video, what would you do?", "sg", "建议 Suggestion"],
+        ["如果你是录像中的…，你会有什么感受？", "If you were in the video, how would you feel?", "op", "意见 Opinion"],
+        ["你认为（…）可以如何……？", "How do you think (…) can…?", "sg", "建议 Suggestion"]
+      ],
+      questions: [
+        {
+          id: "o1", n: "Q1", type: "op", mode: "model",
+          badge: "意见题 Opinion",
+          zh: "你认为新加坡小贩文化是否值得花大力气保留？请说说你的看法。",
+          en: "Do you think Singapore's hawker culture is worth great effort to preserve? Share your views.",
+          hint: "意见PEEL Opinion PEEL|P · 立场 Stand|E · 这是因为 Because|E · 证据 Evidence|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "立场", pTop: "P", pBot: "立场 Stand",
+              zh: "我认为，新加坡的小贩文化绝对值得花大力气保留，因为它是我们国民身份不可分割的一部分。",
+              en: "I believe Singapore's hawker culture is absolutely worth great effort to preserve, because it is an inseparable part of our national identity.",
+              starter: "我认为，……绝对值得……，因为它是……",
+              starterEn: "I believe … is absolutely worth …, because it is …" },
+            { label: "理由", pTop: "E", pBot: "理由 Reason",
+              zh: "这是因为，小贩中心是不同种族、不同年龄、不同收入的新加坡人能够平等聚首的「社区餐厅」——一份S$3的鸡饭，把劳动阶层与白领的乡愁，平等地放在了同一张桌子上。",
+              en: "This is because hawker centres are the \"community dining rooms\" where Singaporeans of different races, ages and incomes gather as equals — a S$3 plate of chicken rice places the labourer's lunch and the white-collar worker's nostalgia equally on the same table.",
+              starter: "这是因为，……是……，把……与……，平等地放在了……",
+              starterEn: "This is because … is …, placing … and … equally on …" },
+            { label: "证据", pTop: "E", pBot: "证据 Evidence",
+              zh: "就拿2020年12月的事来说，联合国教科文组织把新加坡小贩文化列入「人类非物质文化遗产代表作名录」，是新加坡首项获此认可的文化项目。这份国际认可，正说明了它独特的文化价值。",
+              en: "Take December 2020 as an example: UNESCO inscribed Singapore's hawker culture on its Representative List of the Intangible Cultural Heritage of Humanity — the first Singapore tradition to receive such recognition. This international acclaim affirms its unique cultural value.",
+              starter: "就拿……的事来说，……；这份……，正说明了……",
+              starterEn: "Take … as an example: …; this … affirms …" },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，我认为保留小贩文化不只是「保留几道老菜」，而是守护一份属于我们的集体记忆与身份认同。",
+              en: "Therefore, I believe preserving hawker culture is not merely \"preserving a few old dishes\" — it is safeguarding a collective memory and sense of identity that belongs to us.",
+              starter: "所以，我认为……不只是……，而是……",
+              starterEn: "Therefore, I believe … is not merely …, it is …" }
+          ]
+        },
+        {
+          id: "o2", n: "Q2", type: "sg", mode: "model",
+          badge: "建议题 Suggestion",
+          zh: "你认为政府可以如何吸引更多年轻人投身小贩行业？",
+          en: "How do you think the government can attract more young people to enter the hawker trade?",
+          hint: "建议PEEL Suggestion PEEL|P · 建议 Suggestion|E · 首先／然后／最后 First/Then/Finally|E · 如果这样做 If this is done|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "建议", pTop: "P", pBot: "建议 Suggest",
+              zh: "第一，我认为政府可以推行「青年小贩计划」，从财务与培训两方面降低年轻人入行的门槛。",
+              en: "First, I believe the government can launch a \"Youth Hawker Programme\" to lower entry barriers for young people through both financial and training support.",
+              starter: "第一，我认为政府可以……，从……两方面降低……",
+              starterEn: "First, I believe the government can …, lowering … through both …" },
+            { label: "步骤", pTop: "E", pBot: "步骤 How",
+              zh: "首先，国家环境局可设立专属基金，为25岁以下的年轻摊主提供首两年免租与S$10,000创业启动金。然后，旅游局可与小贩协会合办「老摊主带新人」师徒计划。最后，资工局可为青年摊主开设社媒经营与品牌建设的进修课程。",
+              en: "To start, NEA can establish a dedicated fund providing the first two years rent-free plus a S$10,000 startup grant for hawkers under 25. Then, STB can partner with the Hawkers Association on a \"Veteran-Apprentice Mentorship Programme.\" Finally, NTUC LearningHub can offer young hawkers refresher courses on social media management and brand building.",
+              starter: "首先……。然后……。最后……。",
+              starterEn: "To start … Then … Finally …" },
+            { label: "效果", pTop: "E", pBot: "效果 Outcome",
+              zh: "如果这样做，就会让有志入行的年轻人不再被起步资金吓退，从而吸引一批真正热爱厨艺的新血加入小贩行列，让招牌老味道得以延续。",
+              en: "If this is done, aspiring young people will no longer be deterred by startup costs, attracting genuine culinary enthusiasts into hawkering — allowing signature heritage flavours to live on.",
+              starter: "如果这样做，就会让……不再被……，从而吸引……，让……得以延续。",
+              starterEn: "If this is done, … will no longer be deterred by …, attracting … and allowing … to live on." },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，我认为政府可以认真考虑推行这样一项专属于年轻小贩的扶持计划。",
+              en: "Therefore, I believe the government can give serious consideration to such a dedicated support programme for young hawkers.",
+              starter: "所以，我认为政府可以……",
+              starterEn: "Therefore, I believe the government can …" }
+          ]
+        },
+        {
+          id: "o3", n: "Q3", type: "ex", mode: "model",
+          badge: "经验题 Experience",
+          zh: "你有没有过特别难忘的小贩中心用餐经历？请分享。",
+          en: "Have you ever had a particularly memorable hawker centre dining experience? Please share.",
+          hint: "经验PEEL Experience PEEL|P · 有／没有 Yes/No|E · 一开始／然后／结果 At first/Then/As a result|E · 感受第一／第二 Feeling 1/Feeling 2|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "回应", pTop: "P", pBot: "回应 Yes/No",
+              zh: "有的。我曾经在牛车水熟食中心，跟一位八十二岁的老摊主张伯伯有过一次特别难忘的对话。",
+              en: "Yes. I once had a particularly memorable conversation with Uncle Zhang, an 82-year-old hawker, at Chinatown Complex Food Centre.",
+              starter: "有的。我曾经在……，跟……有过……",
+              starterEn: "Yes. I once …, with … had …" },
+            { label: "经历", pTop: "E", pBot: "经历 Experience",
+              zh: "一开始，我只是和家人去他的摊位吃炒粿条，没特别留意他的故事。然后，我注意到他动作虽慢，可那双手握起锅铲依旧稳，让我忍不住向他请教做菜的诀窍。结果，他笑着告诉我，他已经做这一行四十六年了，最近正考虑退休。",
+              en: "At first, I was just eating his char kway teow with my family, without really noticing his story. Then, I observed that although his movements were slow, his hands held the wok-spatula steady, prompting me to ask him about his cooking secrets. As a result, he smiled and told me that he had been in this trade for forty-six years and was considering retirement.",
+              starter: "一开始，我只是……。然后，我……。结果，他……",
+              starterEn: "At first, I was just …. Then, I …. As a result, he …" },
+            { label: "感受", pTop: "E", pBot: "感受 Feeling",
+              zh: "对于这次经历，我的感受是，第一，我感动于一位老人为了食客坚持四十多年的执着。第二，我也意识到，如果我们这些年轻人不主动去认识、去支持，这些招牌老味道很可能在未来几年永远消失。",
+              en: "My feelings about this experience are: first, I was moved by an old man's dedication of over forty years for his diners. Second, I realised that if we young people do not proactively get to know and support them, these signature heritage flavours may disappear forever within a few years.",
+              starter: "对于这次经历，我的感受是，第一……。第二……。",
+              starterEn: "My feelings about this experience are: first …. Second …" },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，这次经历让我明白，小贩文化的传承，其实就藏在每一次走进熟食中心、每一次主动开口聊天的小小行动之中。",
+              en: "Therefore, this experience taught me that hawker culture's preservation lies precisely in each small act of stepping into a hawker centre and starting a conversation.",
+              starter: "所以，这次经历让我明白……",
+              starterEn: "Therefore, this experience taught me …" }
+          ]
+        },
+        {
+          id: "o4", n: "Q4", type: "op", mode: "scaffold",
+          badge: "意见题 Opinion",
+          zh: "你认为「米其林指南」对新加坡小贩文化是利还是弊？请说说你的看法。",
+          en: "Do you think the Michelin Guide is a benefit or harm to Singapore's hawker culture? Share your views.",
+          hint: "意见PEEL Opinion PEEL|P · 立场 Stand|E · 这是因为 Because|E · 证据 Evidence|L · 总结 Conclusion|口述约 60 秒 ~60 sec",
+          scaffoldHint: { zh: "建议立场：双面影响。利 → 提升国际知名度，吸引海外食客；让本地年轻人重新认识小贩文化的世界级地位。弊 → 中星摊位被资本收购、租金抬高，反而挤压传统老摊主的生存空间。可以举油鸡饭面摊位的例子。", en: "Suggested stand: two-sided impact. Benefit → boosts international fame and attracts overseas diners; lets local youths rediscover hawker culture's world-class status. Harm → starred stalls bought up by investors and rents pushed up, squeezing traditional hawkers. Example: the soya-sauce chicken rice noodle stall." }
+        },
+        {
+          id: "o5", n: "Q5", type: "sg", mode: "scaffold",
+          badge: "建议题 Suggestion",
+          zh: "你认为学校可以如何让学生更深入认识本地小贩文化？",
+          en: "How do you think schools can let students gain a deeper understanding of local hawker culture?",
+          hint: "建议PEEL Suggestion PEEL|P · 建议 Suggestion|E · 首先／然后／最后 First/Then/Finally|E · 如果这样做 If this is done|L · 总结 Conclusion|口述约 60 秒 ~60 sec",
+          scaffoldHint: { zh: "建议方向：「饮食遗产体验课」+「招牌菜口述历史作业」双线推进。效果 → 让学生从「父母带去吃的地方」转变为「自己有故事可讲的文化」。", en: "Suggested approach: combine \"Food Heritage Experiential Lessons\" with \"Signature Dish Oral History\" assignments. Effect → shift hawker culture from \"the place parents take you to eat\" to \"a culture that I myself have stories to tell about.\"" }
         }
       ]
     },
@@ -7038,7 +7221,7 @@ function coverHTML(){
       <div class="cover-hero-label">O水准华文 · O-Level Chinese</div>
       <div class="cover-hero-title">时事课题应用手册</div>
       <div class="cover-hero-titleen" style="display:block">Current Affairs Workbook</div>
-      <div class="cover-hero-titleen" style="display:block;margin-top:6px">写作、阅读与口试内容指引与技能练习册</div>
+      <div class="cover-hero-subtitle-zh" style="display:block;margin-top:6px">写作、阅读与口试内容指引与技能练习册</div>
       <div class="cover-hero-titleen" style="display:block;font-style:italic;margin-top:2px">Writing, Reading and Oral Content Guide and Technical Practice</div>
       <div class="cover-hero-desc">从真实时事话题出发，逐步掌握华文应试的各大模块。每个话题都通过 6 个练习模块深入学习：话题速览 → 公务电邮 → 议论文 → 阅读理解 → 建议题 → 口试。<br><span style="font-style:italic;opacity:.75">Each topic is studied through 6 practice modules: Overview → Email → Essay → Comprehension → Suggestions → Oral.</span></div>
       <div class="cover-hero-stats">
