@@ -495,6 +495,7 @@ body.hide-en .starter-en,
 body.hide-en .tbl-row-en,
 body.hide-en .v-en,
 body.hide-en .zh-en,
+body.hide-en .mix-en,
 body.hide-en .model-ans-en,
 body.hide-en [data-en]{display:none !important}
 /* Italic-styled English bits (inline-styled paragraphs/divs) */
@@ -593,11 +594,11 @@ const CATEGORIES=[
     icon:"💚",
     subtopics:[
       {id:"vaping",label:"电子烟与丧尸烟弹",labelEn:"Vapes & Kpods",active:true},
+      {id:"bullying_peer",label:"校园霸凌、网络霸凌与同侪压力",labelEn:"Bullying & Peer Pressure",active:true},
       {id:"mental_health",label:"心理健康与求助文化",labelEn:"Mental Health & Help-Seeking",active:false},
       {id:"sleep_screen",label:"睡眠不足与屏幕时间",labelEn:"Sleep & Screen Time",active:false},
       {id:"fitness_diet",label:"运动、饮食与生活方式",labelEn:"Fitness, Diet & Lifestyle",active:false},
       {id:"stress_balance",label:"压力与生活平衡",labelEn:"Stress & Life Balance",active:false},
-      {id:"bullying_peer",label:"校园霸凌、网络霸凌与同伴压力",labelEn:"Bullying & Peer Pressure",active:false},
     ]
   },
   {
@@ -735,6 +736,10 @@ const PINYIN_OVERRIDES = {
   "身份":"shēn fèn",
   "处理":"chǔ lǐ", "相处":"xiāng chǔ",
   "好处":"hǎo chù", "坏处":"huài chù",
+  "同侪":"tóng chái", "同侪压力":"tóng chái yā lì",
+  // 弹 (dàn = bullet/projectile/cartridge; tán = bounce/spring)
+  "烟弹":"yān dàn", "丧尸烟弹":"sàng shī yān dàn", "子弹":"zǐ dàn", "导弹":"dǎo dàn", "炸弹":"zhà dàn", "弹药":"dàn yào",
+  "反弹":"fǎn tán", "弹簧":"tán huáng", "弹力":"tán lì", "弹性":"tán xìng", "弹奏":"tán zòu", "弹琴":"tán qín",
   // common school/education terms
   "学生":"xué shēng", "学习":"xué xí", "学校":"xué xiào", "同学":"tóng xué",
   "作业":"zuò yè", "作文":"zuò wén", "考试":"kǎo shì",
@@ -1184,6 +1189,121 @@ function autoGrowAnsField(el){
   el.style.height = Math.max(180, el.scrollHeight + 4) + 'px';
 }
 function onAnsInput(id,el){saveAns(id,el.value); autoGrowAnsField(el);}
+
+/**
+ * Walk visible text nodes and wrap English-looking segments in <span class="mix-en">.
+ * This makes mixed-language strings (e.g., "传承危机 Succession Crisis") respond to the English toggle.
+ *
+ * Heuristic for "English segment": ≥3 consecutive Latin chars/spaces/ASCII punctuation,
+ * possibly preceded by a separator like ' ', '·', ':', '：', '/', '、', '—', '–', '-'.
+ * Stops at any CJK character.
+ */
+function wrapMixedEnglish(){
+  // Skip these tags entirely
+  const SKIP_TAGS = new Set(['SCRIPT','STYLE','TEXTAREA','INPUT','RT','RP','RUBY','OPTION','SELECT']);
+  // Don't wrap inside elements that are already English-only (already toggleable)
+  const SKIP_SELECTOR = '.en,.en-para,.en-col,.bi-en,.cmp-label-ref,.coll-title-en,.cover-hero-titleen,.ctx-hero-en,.ctx-stat-en,.dec-strategy-en,.model-ans-en,.nxt-title-en,.onboard-step-en,.onboard-title-en,.persp-en,.pq-q-en,.pt-en,.q-context-en,.q-instruction-en,.q-type-desc-en,.qt-kw-en,.s-con-en,.sg-item-en,.slabel-en,.starter-en,.tbl-row-en,.v-en,.zh-en,.mix-en';
+  
+  // Match: optional separator (space/punct) + Latin/digit/punct/space (at least 3 ASCII letters total)
+  // Pattern: looks for runs that contain at least 3 consecutive Latin letters
+  const EN_REGEX = /[A-Za-z][A-Za-z0-9'.\-,;:!?()&%/\s]{2,}/g;
+  
+  // First, unwrap any existing .mix-en (so we re-wrap fresh — no nesting)
+  document.querySelectorAll('span.mix-en').forEach(span => {
+    const parent = span.parentNode;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+    parent.normalize();
+  });
+  
+  // Walk text nodes
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: function(node){
+      // Skip empty
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      // Skip if parent is in SKIP_TAGS or already English
+      let p = node.parentNode;
+      while (p && p !== document.body) {
+        if (SKIP_TAGS.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+        if (p.matches && p.matches(SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
+        p = p.parentNode;
+      }
+      const v = node.nodeValue;
+      const hasZh = /[\u4e00-\u9fff]/.test(v);
+      const hasEn = /[A-Za-z]{3,}/.test(v);
+      // Process if: contains English (≥3 letters), regardless of whether also Chinese
+      if (!hasEn) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  
+  const targets = [];
+  let n;
+  while ((n = walker.nextNode())) targets.push(n);
+  
+  targets.forEach(node => {
+    const text = node.nodeValue;
+    const hasZh = /[\u4e00-\u9fff]/.test(text);
+    
+    // Case 1: text has no Chinese — wrap entire node in mix-en
+    if (!hasZh) {
+      const span = document.createElement('span');
+      span.className = 'mix-en';
+      span.textContent = text;
+      node.parentNode.insertBefore(span, node);
+      node.parentNode.removeChild(node);
+      return;
+    }
+    
+    // Case 2: mixed — find English segments and wrap them
+    const fragments = [];
+    let lastEnd = 0;
+    let m;
+    EN_REGEX.lastIndex = 0;
+    while ((m = EN_REGEX.exec(text)) !== null) {
+      if (!/[A-Za-z]{3,}/.test(m[0])) continue;
+      let start = m.index;
+      let end = start + m[0].length;
+      while (start < end && /\s/.test(text[start])) start++;
+      while (end > start && /\s/.test(text[end-1])) end--;
+      let prefixStart = start;
+      while (prefixStart > lastEnd && /[\s·:：\-—–|/、\.]/.test(text[prefixStart-1])) prefixStart--;
+      if (prefixStart < lastEnd) prefixStart = lastEnd;
+      
+      if (prefixStart > lastEnd) {
+        fragments.push({ kind: 'zh', text: text.substring(lastEnd, prefixStart) });
+      }
+      fragments.push({ kind: 'en', text: text.substring(prefixStart, end) });
+      lastEnd = end;
+    }
+    if (lastEnd < text.length) fragments.push({ kind: 'zh', text: text.substring(lastEnd) });
+    
+    if (fragments.length <= 1) return;
+    
+    const parent = node.parentNode;
+    fragments.forEach(f => {
+      if (f.kind === 'en') {
+        const span = document.createElement('span');
+        span.className = 'mix-en';
+        span.textContent = f.text;
+        parent.insertBefore(span, node);
+      } else {
+        parent.insertBefore(document.createTextNode(f.text), node);
+      }
+    });
+    parent.removeChild(node);
+  });
+}
+
+// Run wrapMixedEnglish whenever content is rendered
+// Hook: monkey-patch innerHTML setter? Too invasive. Instead, run on tab/topic change + page load.
+function scheduleWrapMixedEnglish(){
+  setTimeout(function(){
+    if(document.body.classList.contains('hide-en')){
+      wrapMixedEnglish();
+    }
+  }, 100);
+}
 // Auto-grow all ans-fields on page load (so saved answers expand correctly)
 window.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('.ans-field').forEach(autoGrowAnsField);
@@ -1195,6 +1315,8 @@ window.addEventListener('DOMContentLoaded',function(){
       document.body.classList.add('hide-en');
       const cb = document.getElementById('enGlobal');
       if(cb) cb.checked = false;
+      // Wrap mixed-language strings now that body is loaded
+      if(typeof scheduleWrapMixedEnglish === 'function') scheduleWrapMixedEnglish();
     }
   } catch(e){}
 });
@@ -2596,7 +2718,7 @@ const TOPIC_CONTENT = {
           points: [
             { zh: "电子烟掺杂依托咪酯后已不再是「替代品」，而是真正的毒品，必须以法律雷霆万钧之势铲除。", en: "Once laced with etomidate, vapes are no longer a \"substitute\" but real drugs — only swift, severe legal action can root them out." },
             { zh: "青少年大脑尚未发育成熟，沾染丧尸烟弹会造成不可逆转的神经损害，预防胜于治疗。", en: "Adolescent brains are not fully developed; kpods can cause irreversible neural damage — prevention beats cure." },
-            { zh: "若不立即出重拳，校园贩卖与同伴压力会以倍数蔓延，形成一代人的健康危机。", en: "Without decisive action now, school dealing and peer pressure will spread exponentially, becoming a generational health crisis." },
+            { zh: "若不立即出重拳，校园贩卖与同侪压力会以倍数蔓延，形成一代人的健康危机。", en: "Without decisive action now, school dealing and peer pressure will spread exponentially, becoming a generational health crisis." },
           ]
         },
         con: {
@@ -2620,7 +2742,7 @@ const TOPIC_CONTENT = {
             ["上瘾", "shàng yǐn", "addicted"],
             ["走私", "zǒu sī", "smuggle"],
             ["贩卖", "fàn mài", "to sell illegally / traffic"],
-            ["同伴压力", "tóng bàn yā lì", "peer pressure"],
+            ["同侪压力", "tóng chái yā lì", "peer pressure"],
             ["缉获", "jī huò", "to seize / confiscate"],
           ]
         },
@@ -3432,7 +3554,7 @@ const TOPIC_CONTENT = {
                 starter: "如果这样做，就会让……明白……，从而……",
                 starterEn: "If this is done, … will understand …, thereby …" },
               { label: "总结", pTop: "L", pBot: "总结 Link",
-                zh: "所以，我认为坚定而平和地拒绝，是青少年面对同伴压力时最有效的自我保护。",
+                zh: "所以，我认为坚定而平和地拒绝，是青少年面对同侪压力时最有效的自我保护。",
                 en: "Therefore, I believe a firm yet calm refusal is the most effective self-protection against peer pressure.",
                 starter: "所以，我认为……是……最有效的……",
                 starterEn: "Therefore, I believe … is the most effective…" },
@@ -3708,7 +3830,7 @@ const TOPIC_CONTENT = {
               starter: "一开始……。然后……。结果……。",
               starterEn: "At first… Then… As a result…" },
             { label: "感受", pTop: "E", pBot: "感受",
-              zh: "对于这件事，我的感受是：第一，我深深体会到「同伴压力」的可怕——一句简单的劝说，就能让人放下警觉。第二，我也意识到「拒绝」需要日常的练习，否则关键时刻就说不出口。",
+              zh: "对于这件事，我的感受是：第一，我深深体会到「同侪压力」的可怕——一句简单的劝说，就能让人放下警觉。第二，我也意识到「拒绝」需要日常的练习，否则关键时刻就说不出口。",
               en: "My feelings about this are: first, I truly understood the danger of \"peer pressure\" — a single sentence can lower one's guard. Second, I realised \"refusal\" needs daily practice — otherwise it cannot come out at the critical moment.",
               starter: "对于这件事，我的感受是，第一……；第二……。",
               starterEn: "My feelings about this are: first…; second…" },
@@ -3734,6 +3856,1088 @@ const TOPIC_CONTENT = {
           en: "How can schools make \"Refuse the Kpod\" education more effective, not just a formality?",
           hint: "建议PEEL Suggestion PEEL|P · 建议 Suggestion|E · 首先／然后／最后 First/Then/Finally|E · 如果这样做 If this is done|L · 总结 Conclusion|口述约 60 秒 ~60 sec",
           scaffoldHint: { zh: "建议 → 「真实故事」+「同伴守护员」双线并行。效果 → 让教育从「单向说教」变成「双向共鸣」，学生才会真正听进去。", en: "Suggestion → Combine \"real stories\" with \"Peer Guardians.\" Effect → Education shifts from one-way preaching to two-way resonance — only then will students truly listen." }
+        }
+      ]
+    }
+  },
+  bullying_peer: {
+    overview: {
+      hero: {
+        zh: "新加坡教育部于2026年4月推出更严的校园霸凌处分框架——首次严重违规可被停学一至三天、操行等级降级；高小及以上男生在加重情节下，可施以鞭刑一至两鞭",
+        en: "In April 2026, Singapore's Ministry of Education rolled out a stricter framework for school bullying — first-time serious offenders may face 1-3 days suspension and conduct grade downgrade; upper-primary boys and above may face 1-2 strokes of the cane in aggravated cases",
+        source: "来源 Source: 新加坡教育部2026年4月15日声明、《海峡时报》、亚洲新闻台报道 · MOE statement 15 Apr 2026, The Straits Times, CNA"
+      },
+      background: {
+        paragraphs: [
+          { zh: "校园霸凌不只是「孩子之间的小摩擦」，而是反复且有意图地造成伤害的行为。新加坡教育部明确区分两个概念——一次性的不当言行属于「伤害性行为」（hurtful behaviour），而反复、有针对性的伤害才构成「霸凌」（bullying）。据教育部数据，2021至2025年间，本地中学每千名学生平均每年有8起霸凌案例，比2020至2024年的6起明显上升。",
+            en: "School bullying is not merely \"kids' minor scuffles\" — it is repeated, intentional behaviour designed to cause harm. Singapore's MOE clearly distinguishes two concepts: one-off inappropriate conduct is \"hurtful behaviour,\" while repeated, targeted harm constitutes \"bullying.\" MOE data shows that from 2021 to 2025, the average annual rate was 8 bullying cases per 1,000 secondary students — a notable rise from 6 in the preceding 2020-2024 period." },
+          { zh: "更值得关注的是网络霸凌的兴起。随着青少年生活全面数码化，社媒贴文、群组聊天与匿名账号成为新型加害空间——一句嘲讽、一张被恶意P图的照片，都可能在校园内引发持续性的孤立与伤害。本地研究显示，受过网络霸凌的青少年出现焦虑、抑郁与睡眠问题的比例，比未受影响的同龄人高出两到三倍。",
+            en: "Of greater concern is the rise of cyberbullying. As teenage life shifts fully online, social-media posts, group chats and anonymous accounts have become new arenas of harm — one mocking comment, one maliciously edited photo, can trigger sustained isolation and damage within a school community. Local research shows that adolescents who have experienced cyberbullying are 2-3 times more likely to suffer anxiety, depression and sleep disorders than peers who have not." },
+          { zh: "在这两种霸凌之外，同侪压力（peer pressure）则更隐形也更普遍。它不一定带有恶意，却同样能让青少年做出违心的选择——「不跟着抽电子烟就被孤立」、「不参与起哄就被踢出群」。心理学者把这种现象称为「无声的霸凌」——它没有拳头，却比拳头更难抵抗。",
+            en: "Beyond these two forms of bullying, peer pressure operates more invisibly and pervasively. It is not always malicious, yet it can equally drive youths to make choices against their will — \"vape with us or get frozen out,\" \"join the mockery or get kicked from the group chat.\" Psychologists call this \"silent bullying\" — it has no fists, yet is harder to resist than fists." },
+          { zh: "对此，本地政府已展开多线行动：教育部于2026年4月推出更严的处分框架，把严重霸凌行为的惩处比照吸食电子烟；同时强化网络健康课程、增加学校辅导员人手、并设立更便捷的匿名举报渠道。然而，多名国会议员与儿童福利组织也指出——单靠惩罚未必能解决根本问题，「修复式正义」与全面性的心理健康支援同样不可或缺。",
+            en: "In response, the government has launched a multi-pronged effort: MOE's stricter April 2026 framework aligns serious bullying penalties with vaping offences; cyber wellness curricula are being strengthened; more school counsellors are being deployed; and easier anonymous reporting channels have been established. Yet several MPs and child-welfare organisations have noted that punishment alone cannot solve the root problem — restorative justice and comprehensive mental-health support are equally indispensable." },
+        ]
+      },
+      ctxStats: [
+        ["发生率 Incidence Rate", "新加坡中学每千名学生平均每年有8起霸凌案例（2021-2025），比2020-2024年的6起明显上升。", "Local secondary schools recorded an average of 8 bullying cases per 1,000 students annually (2021-2025), up notably from 6 in 2020-2024."],
+        ["新法规 New Framework", "2026年4月15日教育部推行严刑框架：首次严重违规1-3天停学，高小以上男生加重情节可处1鞭；非常严重者可处3-5天停学，最多2鞭。", "MOE's 15 April 2026 framework: first-time serious offenders face 1-3 days suspension; upper-primary boys+ may receive 1 cane stroke with aggravating factors. Very serious offences: 3-5 days suspension and up to 2 strokes."],
+        ["心理影响 Mental Impact", "受过网络霸凌的青少年出现焦虑、抑郁与睡眠问题的比例，比未受影响的同龄人高出两至三倍。", "Adolescents who have experienced cyberbullying are 2-3 times more likely to suffer anxiety, depression and sleep disorders than peers who have not."],
+      ],
+      ctxSource: "数据来源：新加坡教育部、新加坡国立教育学院研究、亚洲新闻台与《海峡时报》2024-2026年相关报道。Sources: MOE, NIE Singapore research, and 2024-2026 coverage by CNA and The Straits Times.",
+      perspectives: {
+        pro: {
+          label: "严惩派 Pro-Deterrence · 部分议员、家长团体、纪律倡导者 Some MPs, parent groups, discipline advocates",
+          points: [
+            { zh: "明确而一致的处分（包括鞭刑）能产生有效的威慑力，让潜在加害者三思而行。", en: "Clear and consistent penalties (including caning) deliver effective deterrence — making potential perpetrators think twice." },
+            { zh: "把霸凌处分与吸食电子烟挂钩，传达了「霸凌同样不可接受」的明确社会信号。", en: "Aligning bullying penalties with vaping offences sends a clear social signal: bullying is equally unacceptable." },
+            { zh: "受害者及其家属呼吁多年——若没有强而有力的处分，受害者的痛苦将继续被「淡化处理」。", en: "Victims and their families have long called for it — without strong penalties, victims' suffering continues to be \"downplayed.\"" },
+          ]
+        },
+        con: {
+          label: "修复派 Pro-Restoration · 儿童心理学家、辅导员、工人党议员 Child psychologists, counsellors, Workers' Party MPs",
+          points: [
+            { zh: "霸凌往往源自家庭破裂、心理创伤或社交焦虑——纯粹的惩罚无法解决这些深层根源。", en: "Bullying often stems from family breakdown, psychological trauma or social anxiety — pure punishment cannot address these deeper roots." },
+            { zh: "「修复式正义」让加害者面对自己的行为后果、倾听受害者的感受——这比鞭刑更能让一个人真正悔改。", en: "\"Restorative justice\" lets perpetrators confront the consequences of their actions and hear victims' feelings — this drives genuine remorse better than caning ever could." },
+            { zh: "若只惩罚而不修复，加害者很可能在毕业后以更隐蔽的方式延续暴力——网络匿名霸凌的兴起就是警讯。", en: "If we punish without restoring, perpetrators may continue violence in more hidden forms after graduation — the rise of anonymous cyberbullying is the warning sign." },
+          ]
+        }
+      },
+      vocab: [
+        {
+          title: "霸凌现象 Bullying Phenomena",
+          items: [
+            ["校园霸凌", "xiào yuán bà líng", "school bullying"],
+            ["网络霸凌", "wǎng luò bà líng", "cyberbullying"],
+            ["同侪压力", "tóng chái yā lì", "peer pressure"],
+            ["伤害性行为", "shāng hài xìng xíng wéi", "hurtful behaviour"],
+            ["反复施压", "fǎn fù shī yā", "to apply pressure repeatedly"],
+            ["孤立排挤", "gū lì pái jǐ", "to isolate / exclude"],
+            ["言语攻击", "yán yǔ gōng jī", "verbal attack"],
+            ["匿名账号", "nì míng zhàng hào", "anonymous account"],
+            ["散播谣言", "sàn bō yáo yán", "to spread rumours"],
+            ["挑衅行为", "tiǎo xìn xíng wéi", "provocative behaviour"],
+          ]
+        },
+        {
+          title: "应对与处分 Response & Discipline",
+          items: [
+            ["严刑峻法", "yán xíng jùn fǎ", "strict / severe laws"],
+            ["鞭刑", "biān xíng", "caning (corporal punishment)"],
+            ["停学", "tíng xué", "suspension from school"],
+            ["操行等级", "cāo xíng děng jí", "conduct grade"],
+            ["威慑作用", "wēi shè zuò yòng", "deterrent effect"],
+            ["修复式正义", "xiū fù shì zhèng yì", "restorative justice"],
+            ["辅导员", "fǔ dǎo yuán", "counsellor"],
+            ["举报渠道", "jǔ bào qú dào", "reporting channel"],
+            ["心理辅导", "xīn lǐ fǔ dǎo", "psychological counselling"],
+            ["旁观者效应", "páng guān zhě xiào yìng", "bystander effect"],
+          ]
+        },
+        {
+          title: "实用短语 Useful Phrases",
+          items: [
+            ["挺身而出", "tǐng shēn ér chū", "to stand up bravely"],
+            ["袖手旁观", "xiù shǒu páng guān", "to stand by idly"],
+            ["不可推卸的责任", "bù kě tuī xiè de zé rèn", "responsibility that cannot be shirked"],
+            ["共同营造", "gòng tóng yíng zào", "to jointly create / shape"],
+            ["相互尊重", "xiāng hù zūn zhòng", "mutual respect"],
+            ["及时介入", "jí shí jiè rù", "to intervene in time"],
+            ["治标治本", "zhì biāo zhì běn", "to treat both symptoms and root causes"],
+            ["以儆效尤", "yǐ jǐng xiào yóu", "to set as a warning to others"],
+            ["对症下药", "duì zhèng xià yào", "to prescribe the right cure for the illness"],
+            ["双管齐下", "shuāng guǎn qí xià", "to take two parallel actions"],
+          ]
+        }
+      ]
+    },
+    email: {
+      anchor: {
+        question: {
+          context: {
+            zh: "新加坡教育部于2026年4月15日宣布更严的校园霸凌处分框架，把霸凌行为的处分比照吸食电子烟——首次严重违规可被停学一至三天、操行降级，高小及以上男生在加重情节下可处鞭刑一鞭；非常严重违规可处停学三至五天，最多两鞭。这项新政在社会上引起激烈讨论：有人拍手称快，认为「终于有真正的威慑力」；也有人忧心忡忡，担忧鞭刑只会激化对立，而非解决霸凌的根源。",
+            en: "On 15 April 2026, Singapore's Ministry of Education announced a stricter framework for school bullying — aligning penalties with those for vaping offences. First-time serious offenders may face 1-3 days suspension and conduct downgrade; upper-primary boys+ may receive 1 stroke of the cane in aggravated cases; very serious offences may incur 3-5 days suspension and up to 2 strokes. The policy has sparked intense public debate — some applaud the \"genuine deterrence at last,\" while others worry that caning will only sharpen confrontation rather than address the root causes of bullying."
+          },
+          task: {
+            zh: "假设你是中四学生林俊豪，请写一封电邮给教育部部长李智陞，（a）说明你对这项新处分框架的看法，并（b）建议教育部可同步推行的补救措施。",
+            en: "Assume you are Lim Junhao, a Sec 4 student. Write an email to Minister for Education Desmond Lee, (a) explaining your views on the new disciplinary framework, and (b) suggesting complementary measures the Ministry can implement in parallel."
+          }
+        },
+        partA: {
+          opinion1: {
+            evidenceType: "数据 Data",
+            rows: [
+              { label: "立场", pTop: "P", pBot: "立场 Stand",
+                zh: "我认为，教育部推出更严的校园霸凌处分框架，整体方向是正确的，因为长期以来「轻处分」未能有效遏制霸凌。",
+                en: "I believe the Ministry's stricter framework moves in the right direction overall, because years of \"light penalties\" have failed to effectively curb bullying.",
+                starter: "我认为，……整体方向是正确的，因为长期以来……",
+                starterEn: "I believe … moves in the right direction overall, because for years …" },
+              { label: "理由", pTop: "E", pBot: "理由 Reason",
+                zh: "这是因为，明确而一致的处分能产生有效的威慑作用，让潜在的加害者意识到「霸凌不再只是被记小过」，从而在出手之前三思。",
+                en: "This is because clear and consistent penalties create effective deterrence — making potential perpetrators realise that \"bullying is no longer just a minor demerit,\" and thus pause before acting.",
+                starter: "这是因为，……能产生有效的……，让……，从而……",
+                starterEn: "This is because … creates effective …, making …, and thereby …" },
+              { label: "证据（数据）", pTop: "E", pBot: "证据 Evidence",
+                zh: "数据显示，2021至2025年间，本地中学每千名学生平均每年有8起霸凌案例，比前一个五年的6起明显上升——这正说明旧的处分制度已无法应对当今的霸凌形势。",
+                en: "Data shows that between 2021 and 2025, local secondary schools recorded an average of 8 bullying cases per 1,000 students annually, up notably from 6 in the preceding five years — this clearly demonstrates that the old disciplinary regime can no longer respond to today's bullying landscape.",
+                starter: "数据显示，……，比……明显上升——这正说明……已无法……",
+                starterEn: "Data shows that …, up notably from … — this clearly demonstrates that … can no longer …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我支持教育部把霸凌处分与吸食电子烟挂钩，传达「霸凌同样零容忍」的明确信号。",
+                en: "Therefore, I support the Ministry's decision to align bullying penalties with vaping offences, sending a clear \"zero tolerance for bullying\" signal.",
+                starter: "所以，我支持……，传达「……」的明确信号。",
+                starterEn: "Therefore, I support …, sending a clear \"…\" signal." },
+            ]
+          },
+          opinion2: {
+            evidenceType: "个人观察 Personal Observation",
+            rows: [
+              { label: "立场", pTop: "P", pBot: "立场 Stand",
+                zh: "然而，我也想反映，单靠惩罚（包括鞭刑）并不足以从根本上解决校园霸凌的问题。",
+                en: "However, I would also like to highlight that punishment alone (including caning) is insufficient to fundamentally resolve the problem of school bullying.",
+                starter: "然而，我也想反映，单靠……并不足以从根本上解决……",
+                starterEn: "However, I would also like to highlight that … alone is insufficient to fundamentally resolve …" },
+              { label: "理由", pTop: "E", pBot: "理由 Reason",
+                zh: "这是因为，霸凌行为往往源自家庭破裂、心理创伤或社交焦虑——若不对症下药，加害者很可能在毕业后以更隐蔽的方式延续暴力，例如转向匿名网络霸凌。",
+                en: "This is because bullying often stems from family breakdown, psychological trauma or social anxiety — without addressing the root causes, perpetrators may continue violence in more hidden forms after graduation, such as turning to anonymous cyberbullying.",
+                starter: "这是因为，……往往源自……，若不……，……很可能……，例如……",
+                starterEn: "This is because … often stems from …; without …, … may …, such as …" },
+              { label: "证据（个人观察）", pTop: "E", pBot: "证据 Evidence",
+                zh: "就拿我们学校的例子来说，去年一名被记小过的同学，半年后竟在一个匿名 Instagram 账号上持续嘲讽受害者；可见若没有心理辅导与修复机制，单纯的处分只是把霸凌「赶到线下看不见的地方」。",
+                en: "Take an example from my own school: last year, a classmate given a minor demerit was found, six months later, persistently mocking the same victim through an anonymous Instagram account. This shows that without psychological counselling and restoration mechanisms, mere punishment simply pushes bullying \"into the unseen corners offline.\"",
+                starter: "就拿……的例子来说，……；可见若没有……，……只是把……「……」",
+                starterEn: "Take … as an example: …; this shows that without …, … merely … \"…\"" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我认为新框架必须搭配心理辅导、修复式正义与全面性的预防教育，才能真正治标又治本。",
+                en: "Therefore, I believe the new framework must be paired with psychological counselling, restorative justice and comprehensive prevention education to truly treat both symptoms and root causes.",
+                starter: "所以，我认为……必须搭配……、……与……，才能真正治标又治本。",
+                starterEn: "Therefore, I believe … must be paired with …, … and …, to truly treat both symptoms and root causes." },
+            ]
+          }
+        },
+        partB: {
+          suggestion1: {
+            rows: [
+              { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                zh: "第一，我建议教育部在每一所中学设立「修复式正义辅导小组」，与新的处分框架同步推行。",
+                en: "First, I propose the Ministry establish a \"Restorative Justice Counselling Team\" in every secondary school, to be rolled out in parallel with the new disciplinary framework.",
+                starter: "第一，我建议……在……设立……，与……同步推行。",
+                starterEn: "First, I propose … establish … in …, to be rolled out in parallel with …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，每所中学可由现有的辅导员搭配心理学背景的社工，组建一支三至四人的常驻小组。然后，每起霸凌案件除处分外，加害者必须参与至少三次结构化的修复式对话，与受害者面对面倾听其感受、共同制定补救计划。最后，小组需提交六个月追踪报告，确保加害者未再施压、受害者已重建安全感。",
+                en: "To start, every secondary school can form a permanent three-to-four-person team combining existing counsellors with social workers trained in psychology. Then, alongside the disciplinary penalty, every bullying offender must participate in at least three structured restorative dialogues — listening face-to-face to the victim's feelings and co-developing a remediation plan. Finally, the team must submit a six-month follow-up report ensuring the perpetrator has not re-offended and the victim has rebuilt a sense of safety.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让处分不再止于「关一关、打一打」，而是真正引导加害者反思自己的行为，从而降低再犯率，也让受害者获得迟来的尊重。",
+                en: "If this is done, discipline will no longer end with \"detention or caning,\" but will genuinely guide perpetrators to reflect on their actions — lowering reoffending rates and giving victims the long-overdue respect.",
+                starter: "如果这样做，就会让……不再止于「……」，而是……，从而……，也让……",
+                starterEn: "If this is done, … will no longer end with \"…\", but will …, thereby …, and also …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我恳请教育部把「修复式正义」纳入新处分框架，使惩罚与教育齐头并进。",
+                en: "Therefore, I sincerely request the Ministry incorporate \"restorative justice\" into the new framework, letting punishment and education advance hand in hand.",
+                starter: "所以，我恳请……把……纳入……，使……与……齐头并进。",
+                starterEn: "Therefore, I sincerely request … incorporate … into …, letting … and … advance hand in hand." },
+            ]
+          },
+          suggestion2: {
+            rows: [
+              { label: "建议·2 Suggest·2", pTop: "P", pBot: "建议 Suggest",
+                zh: "第二，我建议教育部把网络霸凌纳入新框架的明确范围，并在中学课程中加入「数码同理心」单元。",
+                en: "Second, I propose the Ministry explicitly include cyberbullying within the new framework, and add a \"Digital Empathy\" module to the secondary curriculum.",
+                starter: "第二，我建议……纳入……的明确范围，并在……中加入……",
+                starterEn: "Second, I propose … include … within …, and add … to …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，凡是经核实的网络霸凌行为，应与校内霸凌一视同仁地处分。然后，教育部可在中三、中四两个年级各开设六节「数码同理心」课程，让学生通过情境模拟，理解一句嘲讽贴文对受害者造成的真实伤害。最后，学校可与资工局合办「正向贴文挑战」，鼓励学生用同样的网络声量传递友善。",
+                en: "To start, all verified cyberbullying incidents should be disciplined on the same footing as in-school bullying. Then, the Ministry can introduce six \"Digital Empathy\" lessons at both Sec 3 and Sec 4 levels, letting students understand — through role-play — the real harm caused by a single mocking post. Finally, schools can partner with IMDA on a \"Positive Post Challenge,\" encouraging students to channel the same online energy into kindness.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让学生意识到网络发言并非「无人负责的自由空间」，而是必须为之承担道德与法律责任的公共场域。",
+                en: "If this is done, students will come to understand that online speech is not a \"consequence-free zone\" but a public space in which they bear moral and legal responsibility.",
+                starter: "如果这样做，就会让……意识到……并非「……」，而是……",
+                starterEn: "If this is done, … will come to understand that … is not \"…\" but …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我建议教育部把网络霸凌与「数码同理心」教育列为新框架的两根支柱。",
+                en: "Therefore, I propose the Ministry establish cyberbullying enforcement and \"Digital Empathy\" education as the twin pillars of the new framework.",
+                starter: "所以，我建议……把……与……列为……的两根支柱。",
+                starterEn: "Therefore, I propose … establish … and … as the twin pillars of …" },
+            ]
+          }
+        },
+        subjectZh: "主题：对2026年4月新校园霸凌处分框架的看法，并建议同步推行的补救措施",
+        subjectEn: "Subject: Views on the April 2026 School Bullying Disciplinary Framework, with Complementary Measures Proposed for Parallel Implementation",
+        paragraphsZh: [
+          "李部长：",
+          "\u3000\u3000我是林俊豪，是新加坡某中学中四级的学生。最近，教育部宣布的新校园霸凌处分框架在社会上引起广泛讨论，我也在班上与同学们多次交流彼此的看法。此次致函给您，是想说明我对这项新框架的看法，并提出两项可让教育部同步推行的补救建议。",
+          "\u3000\u3000我认为，教育部推出更严的校园霸凌处分框架，整体方向是正确的，因为长期以来「轻处分」未能有效遏制霸凌。这是因为，明确而一致的处分能产生有效的威慑作用，让潜在的加害者意识到「霸凌不再只是被记小过」，从而在出手之前三思。数据显示，2021至2025年间，本地中学每千名学生平均每年有8起霸凌案例，比前一个五年的6起明显上升——这正说明旧的处分制度已无法应对当今的霸凌形势。所以，我支持教育部把霸凌处分与吸食电子烟挂钩，传达「霸凌同样零容忍」的明确信号。",
+          "\u3000\u3000然而，我也想反映，单靠惩罚（包括鞭刑）并不足以从根本上解决校园霸凌的问题。这是因为，霸凌行为往往源自家庭破裂、心理创伤或社交焦虑——若不对症下药，加害者很可能在毕业后以更隐蔽的方式延续暴力，例如转向匿名网络霸凌。就拿我们学校的例子来说，去年一名被记小过的同学，半年后竟在一个匿名 Instagram 账号上持续嘲讽受害者；可见若没有心理辅导与修复机制，单纯的处分只是把霸凌「赶到线下看不见的地方」。所以，我认为新框架必须搭配心理辅导、修复式正义与全面性的预防教育。",
+          "\u3000\u3000基于以上观察，我恳请部长能够认真考虑以下两项具体的建议。",
+          "\u3000\u3000第一，我建议教育部在每一所中学设立「修复式正义辅导小组」，与新的处分框架同步推行。首先，每所中学可由现有的辅导员搭配心理学背景的社工，组建一支三至四人的常驻小组。然后，每起霸凌案件除处分外，加害者必须参与至少三次结构化的修复式对话，与受害者面对面倾听其感受、共同制定补救计划。最后，小组需提交六个月追踪报告，确保加害者未再施压、受害者已重建安全感。如果这样做，处分就不再止于「关一关、打一打」，而是真正引导加害者反思自己的行为。",
+          "\u3000\u3000第二，我建议教育部把网络霸凌纳入新框架的明确范围，并在中学课程中加入「数码同理心」单元。首先，凡是经核实的网络霸凌行为，应与校内霸凌一视同仁地处分。然后，教育部可在中三、中四两个年级各开设六节「数码同理心」课程，让学生通过情境模拟，理解一句嘲讽贴文对受害者造成的真实伤害。最后，学校可与资工局合办「正向贴文挑战」，鼓励学生用同样的网络声量传递友善。如果这样做，学生就会意识到网络发言并非「无人负责的自由空间」。",
+          "\u3000\u3000素闻您一向重视青少年的全面成长，恳请您能听取一名中四学生对这项新政策的真挚建议，认真考虑以上两项补救措施。感谢您百忙中拨冗阅读此函。",
+          "林俊豪 启",
+        ],
+        paragraphsEn: [
+          "Minister Lee,",
+          "I am Lim Junhao, a Secondary 4 student at a local secondary school. The Ministry's newly announced framework for school bullying discipline has sparked wide public discussion, and I have exchanged views with my classmates many times in recent weeks. I am writing to share my views on this new framework and to put forward two suggestions for complementary measures the Ministry could implement in parallel.",
+          "I believe the Ministry's stricter framework moves in the right direction overall, because years of \"light penalties\" have failed to effectively curb bullying. This is because clear and consistent penalties create effective deterrence — making potential perpetrators realise that \"bullying is no longer just a minor demerit,\" and thus pause before acting. Data shows that between 2021 and 2025, local secondary schools recorded an average of 8 bullying cases per 1,000 students annually, up notably from 6 in the preceding five years — clearly demonstrating that the old disciplinary regime can no longer respond to today's bullying landscape. Therefore, I support the Ministry's decision to align bullying penalties with vaping offences, sending a clear \"zero tolerance for bullying\" signal.",
+          "However, I would also like to highlight that punishment alone (including caning) is insufficient to fundamentally resolve the problem of school bullying. This is because bullying often stems from family breakdown, psychological trauma or social anxiety — without addressing the root causes, perpetrators may continue violence in more hidden forms after graduation, such as turning to anonymous cyberbullying. Take an example from my own school: last year, a classmate given a minor demerit was found, six months later, persistently mocking the same victim through an anonymous Instagram account. This shows that without psychological counselling and restoration mechanisms, mere punishment simply pushes bullying \"into the unseen corners offline.\" Therefore, I believe the new framework must be paired with psychological counselling, restorative justice and comprehensive prevention education.",
+          "Based on these observations, I sincerely request the Minister give serious consideration to the following two concrete suggestions.",
+          "First, I propose the Ministry establish a \"Restorative Justice Counselling Team\" in every secondary school, to be rolled out in parallel with the new disciplinary framework. To start, every school can form a permanent three-to-four-person team combining existing counsellors with social workers trained in psychology. Then, alongside the disciplinary penalty, every bullying offender must participate in at least three structured restorative dialogues — listening face-to-face to the victim's feelings and co-developing a remediation plan. Finally, the team must submit a six-month follow-up report ensuring the perpetrator has not re-offended and the victim has rebuilt a sense of safety. If this is done, discipline will no longer end with \"detention or caning,\" but will genuinely guide perpetrators to reflect on their actions.",
+          "Second, I propose the Ministry explicitly include cyberbullying within the new framework, and add a \"Digital Empathy\" module to the secondary curriculum. To start, all verified cyberbullying incidents should be disciplined on the same footing as in-school bullying. Then, the Ministry can introduce six \"Digital Empathy\" lessons at both Sec 3 and Sec 4 levels, letting students understand — through role-play — the real harm caused by a single mocking post. Finally, schools can partner with IMDA on a \"Positive Post Challenge,\" encouraging students to channel the same online energy into kindness. If this is done, students will come to understand that online speech is not a \"consequence-free zone.\"",
+          "I understand that you have always cared about the holistic development of young people. I sincerely request that you hear a Sec 4 student's heartfelt suggestions on this new policy, and give serious consideration to the two complementary measures above. Thank you for taking the time from your busy schedule to read this letter.",
+          "Lim Junhao",
+        ]
+      },
+      practice: [
+        // ─────────── eq1: 反映+建议 to 学校学生事务处主任 (full model) ───────────
+        {
+          id: "eq1", type: "model", difficulty: 1,
+          context: {
+            zh: "你最近发现，你校内的一位中一学生在过去三个月里，在课室、走廊和食堂里多次被三名中三学长「围堵嘲讽」——一开始是关于他的口音，后来演变成在 TikTok 上嘲笑他的小视频。该位中一同学已经一周没来上课了，你从他的好友口中得知他每天哭着不愿出门。学校虽设有「匿名举报系统」，但因系统操作繁琐、回应缓慢，许多目击者宁愿沉默。",
+            en: "You recently learned that a Sec 1 student in your school has been \"surrounded and mocked\" repeatedly over the past three months by three Sec 3 seniors — in classrooms, corridors and the canteen. What began with remarks about his accent escalated to mocking short videos on TikTok. The Sec 1 student has been absent for a week now; from his close friend, you have learned he cries every day and refuses to leave the house. Although the school has an \"anonymous reporting system,\" many witnesses prefer to stay silent because the system is cumbersome and response is slow."
+          },
+          task: {
+            zh: "假设你是中四学生黄家伟，请写一封电邮给学校学生事务处主任王志伟，（a）反映这起持续性霸凌事件以及举报系统的漏洞，并（b）建议学校可立即采取的补救措施。",
+            en: "Assume you are Wong Jiawei, a Sec 4 student. Write an email to Head of Student Affairs Wang Zhiwei, (a) reporting this sustained bullying case and the flaws in the reporting system, and (b) suggesting concrete remedial actions the school can take immediately."
+          },
+          model: {
+            partA: {
+              opinion1: {
+                evidenceType: "目击证词 Eyewitness Account",
+                rows: [
+                  { label: "立场", pTop: "P", pBot: "立场 Stand",
+                    zh: "我认为，校内一名中一学生正承受着持续而严重的霸凌，已不能再被视作「同学之间的小摩擦」，必须立即介入。",
+                    en: "I believe a Sec 1 student in our school is enduring sustained, serious bullying — this can no longer be dismissed as \"a minor scuffle between classmates,\" and must be addressed immediately.",
+                    starter: "我认为，……正承受着持续而严重的……，已不能再被视作「……」，必须立即介入。",
+                    starterEn: "I believe … is enduring sustained, serious …, this can no longer be dismissed as \"…\", and must be addressed immediately." },
+                  { label: "理由", pTop: "E", pBot: "理由 Reason",
+                    zh: "这是因为，根据教育部对霸凌的定义，「反复而有意图地造成伤害」就是霸凌——三名中三学长在过去三个月里多次以言语、肢体围堵与社媒嘲讽针对同一名同学，完全符合这项定义。",
+                    en: "This is because by MOE's own definition, \"repeated and intentional acts to cause harm\" constitute bullying — and three Sec 3 seniors repeatedly, over three months, targeted the same student through verbal taunts, physical encirclement and social-media mockery, fitting this definition completely.",
+                    starter: "这是因为，根据……，「……」就是……——……在……里多次……，完全符合这项定义。",
+                    starterEn: "This is because by …, \"…\" constitutes …; … repeatedly over … …, fitting this definition completely." },
+                  { label: "证据（目击证词）", pTop: "E", pBot: "证据 Evidence",
+                    zh: "就拿上周五的事来说，我亲眼看到三名学长在食堂围着该名同学，对他模仿口音、扯他书包，旁边几张桌的同学都看见了，却没有人敢出面。同一晚，他们也在 TikTok 上发布了一段嘲讽影片，标签为「#你今天怎么走路」。我已附上影片连结供您参考。",
+                    en: "Take last Friday as an example: I personally saw three seniors surround the Sec 1 student in the canteen, mimicking his accent and tugging at his bag. Students at several nearby tables witnessed it but none dared intervene. That same night, the seniors posted a mocking video on TikTok with the hashtag \"#how-you-walk-today.\" I have attached the video link for your reference.",
+                    starter: "就拿……的事来说，我亲眼看到……，……都看见了，却……。同一……，他们也在……上……。",
+                    starterEn: "Take … as an example: I personally saw …; … witnessed but …. That same …, they also … on …." },
+                  { label: "总结", pTop: "L", pBot: "总结 Link",
+                    zh: "所以，我认为这起案件已非「需观察」的层级，而是需要学生事务处即刻立案处理。",
+                    en: "Therefore, I believe this case is no longer at a \"needs-observation\" level, but requires the Student Affairs Office to open a formal case immediately.",
+                    starter: "所以，我认为……已非「……」的层级，而是需要……即刻……。",
+                    starterEn: "Therefore, I believe … is no longer at a \"…\" level, but requires … to … immediately." },
+                ]
+              },
+              opinion2: {
+                evidenceType: "实际困难 Practical Difficulty",
+                rows: [
+                  { label: "立场", pTop: "P", pBot: "立场 Stand",
+                    zh: "此外，我也想反映，学校现有的「匿名举报系统」存在明显的操作障碍，正间接令许多目击者选择沉默。",
+                    en: "Furthermore, I would also like to highlight that the school's existing \"anonymous reporting system\" has clear operational obstacles, indirectly driving many witnesses to remain silent.",
+                    starter: "此外，我也想反映，……存在明显的……，正间接令……选择沉默。",
+                    starterEn: "Furthermore, I would also like to highlight that … has clear …, indirectly driving … to remain silent." },
+                  { label: "理由", pTop: "E", pBot: "理由 Reason",
+                    zh: "这是因为，现行系统需要登录学校电邮、填写七个栏位、上传截图等繁琐步骤，整个流程至少需要十五分钟；同时举报后两周内没有任何回应或追踪机制，让举报者怀疑「举报到底有没有用」。",
+                    en: "This is because the current system requires logging in to school email, filling out seven fields, uploading screenshots and other cumbersome steps — the whole process takes at least fifteen minutes; meanwhile, no response or tracking mechanism follows for two weeks, leaving reporters wondering \"whether reporting is even useful.\"",
+                    starter: "这是因为，……需要……、……、……等繁琐步骤，整个流程至少需要……；同时……，让……怀疑……",
+                    starterEn: "This is because … requires …, …, … and other cumbersome steps — the whole process takes at least …; meanwhile …, leaving … wondering …" },
+                  { label: "证据（实际困难）", pTop: "E", pBot: "证据 Evidence",
+                    zh: "我自己上周尝试为该位中一同学举报时，光是填写表格就花了十二分钟，更别说担心被加害者发现自己的IP痕迹。我身边四位目击同学，有三位明确告诉我「不想麻烦、不想被报复，所以放弃举报」。",
+                    en: "Last week, when I tried to submit a report on behalf of the Sec 1 student, just filling out the form took me twelve minutes — and that's not counting the worry that the perpetrators might trace my IP. Of the four classmates I know who witnessed the bullying, three told me outright they \"didn't want the trouble, didn't want retaliation, and so gave up reporting.\"",
+                    starter: "我自己……尝试……时，光是……就花了……，更别说……。我身边……，有……明确告诉我「……」。",
+                    starterEn: "When I myself tried …, just … took me …, not to mention …. Of … I know, … told me outright \"…\"." },
+                  { label: "总结", pTop: "L", pBot: "总结 Link",
+                    zh: "所以，我认为系统的设计本身已成为举报路上最大的「无形门槛」，亟需重新检视。",
+                    en: "Therefore, I believe the system's design has itself become the largest \"invisible barrier\" on the path to reporting — and urgently requires re-examination.",
+                    starter: "所以，我认为……本身已成为……最大的「……」，亟需……。",
+                    starterEn: "Therefore, I believe … itself has become the largest \"…\" on the path to …, and urgently requires …." },
+                ]
+              }
+            },
+            partB: {
+              suggestion1: {
+                rows: [
+                  { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                    zh: "第一，我建议学生事务处立即为这位中一同学启动正式辅导与安全计划，同时召见三位加害学长进入修复式对话。",
+                    en: "First, I propose the Student Affairs Office immediately activate a formal counselling and safety plan for the Sec 1 student, while summoning the three senior perpetrators to enter restorative dialogue.",
+                    starter: "第一，我建议……立即为……启动……，同时……。",
+                    starterEn: "First, I propose … immediately activate …, while …." },
+                  { label: "步骤", pTop: "E", pBot: "步骤 How",
+                    zh: "首先，可由学校辅导员每周与受害者会面两次，并安排他一周内回到课堂时由两位「同伴守护员」全天陪同。然后，三名加害学长须分别参加至少三次修复式对话，亲口听受害者描述每一次嘲讽对他的影响。最后，案件须在六个月内每月追踪一次，确保三人不再以任何形式接近受害者。",
+                    en: "To start, the school counsellor can meet the victim twice weekly, and arrange for two trained \"Peer Guardians\" to accompany him throughout his first week back in class. Then, the three perpetrators must each attend at least three restorative dialogues, hearing the victim describe in his own words how each instance of mockery affected him. Finally, the case must be tracked monthly for six months to ensure the three never approach the victim again in any form.",
+                    starter: "首先……。然后……。最后……。",
+                    starterEn: "To start … Then … Finally …" },
+                  { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                    zh: "如果这样做，就会让受害者获得迟来的尊重与保护，也让加害者真正面对自己的行为后果，从根本上降低再犯的可能。",
+                    en: "If this is done, the victim receives the long-overdue respect and protection, and the perpetrators genuinely confront the consequences of their actions — fundamentally reducing the likelihood of reoffending.",
+                    starter: "如果这样做，就会让……获得迟来的……，也让……真正面对……，从根本上……。",
+                    starterEn: "If this is done, … receives the long-overdue …, and … genuinely confronts …, fundamentally …" },
+                  { label: "总结", pTop: "L", pBot: "总结 Link",
+                    zh: "所以，我恳请学生事务处在本周内启动这项「辅导＋修复对话」的双轨处理机制。",
+                    en: "Therefore, I sincerely request the Student Affairs Office activate this twin-track \"counselling + restorative dialogue\" mechanism within this week.",
+                    starter: "所以，我恳请……在……内启动……的双轨处理机制。",
+                    starterEn: "Therefore, I sincerely request … activate the twin-track \"…\" mechanism within …" },
+                ]
+              },
+              suggestion2: {
+                rows: [
+                  { label: "建议·2 Suggest·2", pTop: "P", pBot: "建议 Suggest",
+                    zh: "第二，我建议学校重新设计举报系统，让它在三十秒内就能完成、并自动通知辅导员。",
+                    en: "Second, I propose the school redesign the reporting system so that it can be completed within thirty seconds and automatically notifies the counsellor.",
+                    starter: "第二，我建议……重新设计……，让它在……内就能……、并自动……。",
+                    starterEn: "Second, I propose … redesign … so that it can be completed within … and automatically …" },
+                  { label: "步骤", pTop: "E", pBot: "步骤 How",
+                    zh: "首先，把目前七个栏位简化为三个核心栏位：时间、地点、目击描述。然后，新增「轻按举报」功能——目击者只需在 Microsoft Teams 教育版的特定频道按一下「举报」即可上传。最后，每起举报需在四十八小时内由辅导员书面回应，无回应者由学生事务处主任亲自跟进。",
+                    en: "To start, simplify the current seven fields into three core fields: time, location, witness description. Then, add a \"one-tap report\" function — witnesses only need to tap \"Report\" in a designated Microsoft Teams Education channel to submit. Finally, every report must receive a written response from the counsellor within forty-eight hours; unresponded cases are personally followed up by the Head of Student Affairs.",
+                    starter: "首先……。然后……。最后……。",
+                    starterEn: "To start … Then … Finally …" },
+                  { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                    zh: "如果这样做，就会让举报从「需要勇气＋十五分钟」变成「举手之劳」，目击者再也没有理由保持沉默。",
+                    en: "If this is done, reporting will shift from \"requiring courage plus fifteen minutes\" to \"a tap of one's hand\" — witnesses will have no further reason to stay silent.",
+                    starter: "如果这样做，就会让……从「……」变成「……」，……再也没有理由……。",
+                    starterEn: "If this is done, … will shift from \"…\" to \"…\" — … will have no further reason to …" },
+                  { label: "总结", pTop: "L", pBot: "总结 Link",
+                    zh: "所以，我建议学生事务处可以在下学期开学前完成这项系统升级。",
+                    en: "Therefore, I propose the Student Affairs Office complete this system upgrade before the start of the next semester.",
+                    starter: "所以，我建议……可以在……前完成……。",
+                    starterEn: "Therefore, I propose … complete … before …" },
+                ]
+              }
+            },
+            subjectZh: "主题：反映校内中一同学遭持续性霸凌，并建议设立修复式处理机制与简化举报系统",
+            subjectEn: "Subject: Reporting Sustained Bullying of a Sec 1 Student, with Proposals for Restorative Mechanism and Simplified Reporting System",
+            paragraphsZh: [
+              "王主任：",
+              "\u3000\u3000我是黄家伟，是中四级的学生。这几周我目睹了一起持续性的校内霸凌事件，并对学校现有举报系统的运作产生了深切的忧虑。此次致函给您，是想反映我所观察到的两项问题，并提出两项可以让学生事务处即刻施行的补救建议。",
+              "\u3000\u3000我认为，校内一名中一学生正承受着持续而严重的霸凌，已不能再被视作「同学之间的小摩擦」，必须立即介入。这是因为，根据教育部对霸凌的定义，「反复而有意图地造成伤害」就是霸凌——三名中三学长在过去三个月里多次以言语、肢体围堵与社媒嘲讽针对同一名同学，完全符合这项定义。就拿上周五的事来说，我亲眼看到三名学长在食堂围着该名同学，对他模仿口音、扯他书包，旁边几张桌的同学都看见了，却没有人敢出面。同一晚，他们也在 TikTok 上发布了一段嘲讽影片。所以，我认为这起案件已非「需观察」的层级，而是需要学生事务处即刻立案处理。",
+              "\u3000\u3000此外，我也想反映，学校现有的「匿名举报系统」存在明显的操作障碍，正间接令许多目击者选择沉默。这是因为，现行系统需要登录学校电邮、填写七个栏位、上传截图等繁琐步骤，整个流程至少需要十五分钟；同时举报后两周内没有任何回应或追踪机制。我自己上周尝试为该位中一同学举报时，光是填写表格就花了十二分钟，更别说担心被加害者发现自己的IP痕迹。我身边四位目击同学，有三位明确告诉我「不想麻烦、不想被报复，所以放弃举报」。所以，我认为系统的设计本身已成为举报路上最大的「无形门槛」。",
+              "\u3000\u3000基于以上观察，我恳请学生事务处能够认真考虑以下两项具体的建议。",
+              "\u3000\u3000第一，我建议学生事务处立即为这位中一同学启动正式辅导与安全计划，同时召见三位加害学长进入修复式对话。首先，可由学校辅导员每周与受害者会面两次，并安排他一周内回到课堂时由两位「同伴守护员」全天陪同。然后，三名加害学长须分别参加至少三次修复式对话。最后，案件须在六个月内每月追踪一次。如果这样做，受害者就能获得迟来的尊重与保护。",
+              "\u3000\u3000第二，我建议学校重新设计举报系统，让它在三十秒内就能完成、并自动通知辅导员。首先，把目前七个栏位简化为三个核心栏位：时间、地点、目击描述。然后，新增「轻按举报」功能。最后，每起举报需在四十八小时内由辅导员书面回应。如果这样做，举报就会从「需要勇气＋十五分钟」变成「举手之劳」。",
+              "\u3000\u3000素闻您一向关心校内每一位学生的安全与尊严，恳请您能听取一名目击同学的真挚反映，认真考虑以上两项具体的补救建议。感谢您百忙中拨冗阅读此函。",
+              "黄家伟 启",
+            ],
+            paragraphsEn: [
+              "Director Wang,",
+              "I am Wong Jiawei, a Sec 4 student. Over the past few weeks I have witnessed a sustained bullying incident in our school, and have grown deeply concerned about how our existing reporting system operates. I am writing to report two issues I have observed, and to put forward two suggestions for remedial actions the Student Affairs Office could implement immediately.",
+              "I believe a Sec 1 student in our school is enduring sustained, serious bullying — this can no longer be dismissed as \"a minor scuffle between classmates,\" and must be addressed immediately. This is because by MOE's own definition, \"repeated and intentional acts to cause harm\" constitute bullying — and three Sec 3 seniors repeatedly, over three months, targeted the same student through verbal taunts, physical encirclement and social-media mockery, fitting this definition completely. Take last Friday as an example: I personally saw three seniors surround the Sec 1 student in the canteen, mimicking his accent and tugging at his bag. Students at several nearby tables witnessed it but none dared intervene. That same night, the seniors also posted a mocking video on TikTok. Therefore, I believe this case is no longer at a \"needs-observation\" level, but requires the Student Affairs Office to open a formal case immediately.",
+              "Furthermore, I would also like to highlight that the school's existing \"anonymous reporting system\" has clear operational obstacles, indirectly driving many witnesses to remain silent. This is because the current system requires logging in to school email, filling out seven fields, uploading screenshots and other cumbersome steps — the whole process takes at least fifteen minutes; meanwhile, no response or tracking mechanism follows for two weeks. Last week, when I tried to submit a report on behalf of the Sec 1 student, just filling out the form took me twelve minutes — and that's not counting the worry that the perpetrators might trace my IP. Of the four classmates I know who witnessed the bullying, three told me outright they \"didn't want the trouble, didn't want retaliation, and so gave up reporting.\" Therefore, I believe the system's design has itself become the largest \"invisible barrier\" on the path to reporting.",
+              "Based on these observations, I sincerely request the Student Affairs Office give serious consideration to the following two concrete suggestions.",
+              "First, I propose the Student Affairs Office immediately activate a formal counselling and safety plan for the Sec 1 student, while summoning the three senior perpetrators to enter restorative dialogue. To start, the school counsellor can meet the victim twice weekly, and arrange for two trained \"Peer Guardians\" to accompany him throughout his first week back in class. Then, the three perpetrators must each attend at least three restorative dialogues. Finally, the case must be tracked monthly for six months. If this is done, the victim receives the long-overdue respect and protection.",
+              "Second, I propose the school redesign the reporting system so that it can be completed within thirty seconds and automatically notifies the counsellor. To start, simplify the current seven fields into three core fields: time, location, witness description. Then, add a \"one-tap report\" function. Finally, every report must receive a written response from the counsellor within forty-eight hours. If this is done, reporting will shift from \"requiring courage plus fifteen minutes\" to \"a tap of one's hand.\"",
+              "I understand you have always cared about every student's safety and dignity in our school. I sincerely request that you hear an eyewitness student's heartfelt feedback, and give serious consideration to the two concrete remedial suggestions above. Thank you for taking the time from your busy schedule to read this letter.",
+              "Wong Jiawei",
+            ]
+          }
+        },
+        // ─────────── eq2: 投诉+建议 to 网络安全局局长 ───────────
+        {
+          id: "eq2", type: "scaffold", difficulty: 2,
+          context: {
+            zh: "你最近发现一个名为「@SG_school_tea」的匿名 Telegram 频道，专门转发本地中学生被偷拍的尴尬照片与「人肉」资料——已有逾两万名追随者，受害者中包括你校的几位同学。受害者尝试举报，但 Telegram 客服仅以「未违反平台规则」一句回复。你深感本地匿名网络霸凌已严重失控。",
+            en: "You recently discovered an anonymous Telegram channel called \"@SG_school_tea\" dedicated to circulating embarrassing photos and doxxed personal information of local secondary students — it now has over 20,000 followers, including victims from your own school. Victims have tried to report it, but Telegram support responded only with a one-liner: \"does not violate platform rules.\" You feel anonymous cyberbullying in Singapore has gone seriously out of control."
+          },
+          task: {
+            zh: "假设你是中四学生陈思齐，请写一封电邮给网络安全局局长黄俊杰，（a）投诉本地匿名网络霸凌频道与平台执法不力，并（b）建议局方可立即采取的反制措施。",
+            en: "Assume you are Tan Siqi, a Sec 4 student. Write an email to Cyber Security Agency Commissioner Huang Junjie, (a) lodging a complaint about local anonymous cyberbullying channels and weak platform enforcement, and (b) suggesting counter-measures the agency can take immediately."
+          },
+          aAngles: [
+            { zh: "「平台不作为」角度 → 像 Telegram 这样的平台以「不违反规则」为由拒绝下架本地受害者贴文，让加害者享受零成本的伤害自由——平台已经从「中立工具」变成了「霸凌温床」。",
+              en: "\"Platform inaction\" angle → platforms like Telegram refuse to remove posts harming local victims under \"does not violate rules\" — letting perpetrators enjoy zero-cost freedom to harm. The platform has shifted from \"neutral tool\" to \"breeding ground for bullying.\"" },
+            { zh: "「匿名遮羞布」角度 → 匿名机制本应保护正当言论，如今却被滥用成「人肉攻击」的盾牌；当伤害远远超过保护，机制就必须调整。",
+              en: "\"Anonymity as shield\" angle → anonymity should protect legitimate speech, but is now abused as a shield for doxxing attacks; when harm far outweighs protection, the mechanism must be adjusted." }
+          ],
+          bAngles: [
+            { zh: "强制平台合规 → 立法要求所有在本地拥有逾一万名用户的社媒平台必须在四十八小时内回应本地警方下架令，否则面临每日罚款。",
+              en: "Mandatory platform compliance → legislate that any social-media platform with more than 10,000 local users must respond to local police takedown orders within 48 hours, or face daily fines." },
+            { zh: "本地匿名身份验证 → 任何在本地新加坡境内访问匿名内容的用户，必须先通过 Singpass 验证年龄，无人可在新加坡注册或匿名运营「专门针对未成年人」的频道。",
+              en: "Local anonymity-identity verification → any user accessing anonymous content within Singapore must first verify age via Singpass; no one may register or anonymously operate a channel \"specifically targeting minors\" in Singapore." }
+          ]
+        },
+        // ─────────── eq3: 表扬+建议 to 学校辅导员 ───────────
+        {
+          id: "eq3", type: "scaffold", difficulty: 3,
+          context: {
+            zh: "你校的辅导员陈美玉老师，自上学期起开始每周举办「真心话星期五」午餐对话——任何学生都可以匿名报名，在午餐时间与她和两位同学聊心事。半年来，已有逾两百名同学参加，多名曾被孤立的同学告诉你「那是我一周最期待的时间」。这个活动悄悄地修复着许多受过霸凌伤害的心。",
+            en: "Your school counsellor, Ms Tan Meiyu, has been hosting \"Real Talk Fridays\" lunch dialogues every week since last semester — any student can sign up anonymously to spend lunchtime with her and two classmates sharing what's on their mind. In half a year, over two hundred students have participated, and several previously isolated students have told you \"it's the moment I look forward to most each week.\" This initiative is quietly mending many hearts wounded by bullying."
+          },
+          task: {
+            zh: "假设你是中四学生李雨欣，请写一封电邮给学校辅导员陈美玉老师，（a）表扬「真心话星期五」对受霸凌同学的疗愈作用，并（b）建议未来如何让这项活动惠及更多同学。",
+            en: "Assume you are Lee Yuxin, a Sec 4 student. Write an email to school counsellor Tan Meiyu, (a) commending the healing impact of \"Real Talk Fridays\" on bullied students, and (b) suggesting how the initiative can benefit even more students in future."
+          },
+          aAngles: [
+            { zh: "「修复创伤」角度 → 比起一个正式的辅导预约，午餐时段的轻松气氛让曾受伤的同学更愿意打开心扉，这是任何「制度化辅导」难以取代的人情温度。",
+              en: "\"Healing trauma\" angle → unlike formal counselling appointments, the relaxed lunchtime atmosphere lets wounded students open up more readily — a warmth no \"institutional counselling\" can replace." },
+            { zh: "「同伴疗愈」角度 → 三人对话的设计让受害者发现「自己不孤单」——两位同学的陪伴往往比一位辅导员更让人安心。",
+              en: "\"Peer healing\" angle → the three-person dialogue design lets victims discover \"I'm not alone\" — peer accompaniment often reassures more than a counsellor alone." }
+          ],
+          bAngles: [
+            { zh: "时段扩展 → 增设「真心话星期二」放学后对话，让因课外活动无法参加星期五场的同学也能受惠。",
+              en: "Time-slot expansion → add a \"Real Talk Tuesdays\" after-school dialogue so students whose CCAs clash with Friday lunch can also benefit." },
+            { zh: "「同伴主持人」培训 → 培训一批中三、中四学生作为「同伴主持人」，让活动规模扩大的同时保持「同龄理解」的特色。",
+              en: "\"Peer host\" training → train a cohort of Sec 3-4 students as peer hosts, allowing the initiative to scale up while preserving the \"same-age understanding\" that makes it effective." }
+          ]
+        },
+        // ─────────── eq4: 说明+建议 to 家长教师协会主席 ───────────
+        {
+          id: "eq4", type: "scaffold", difficulty: 3,
+          context: {
+            zh: "你最近注意到，许多家长对「网络霸凌」的认识停留在「孩子吵架的事」层面——不少同学告诉你，他们曾被网络霸凌却不敢告诉父母，因为「他们只会说：『你别理就好』」。你深感家长的认知断层正悄悄成为受害者求助的最大障碍。",
+            en: "You have recently noticed that many parents understand \"cyberbullying\" only at the level of \"kids quarrelling\" — quite a few classmates told you they were cyberbullied but dared not tell their parents because \"they would just say: 'Just ignore it.'\" You feel that parents' awareness gap is quietly becoming the biggest obstacle to victims seeking help."
+          },
+          task: {
+            zh: "假设你是中四学生周晓彤，请写一封电邮给家长教师协会主席林淑芬，（a）说明许多家长对网络霸凌认识不足的现象，并（b）建议协会可推行的家长教育计划。",
+            en: "Assume you are Zhou Xiaotong, a Sec 4 student. Write an email to PTA Chairperson Lim Shufen, (a) explaining how many parents lack understanding of cyberbullying, and (b) suggesting parent-education programmes the PTA can implement."
+          },
+          aAngles: [
+            { zh: "「认知断层」角度 → 多数家长把网络霸凌等同「同学间的小吵架」，无法分辨「持续骚扰」与「一次冲突」的差别，导致他们对孩子的求助掉以轻心。",
+              en: "\"Awareness rupture\" angle → most parents equate cyberbullying with \"a small quarrel between classmates,\" unable to distinguish \"persistent harassment\" from \"a one-off conflict\" — causing them to take their children's pleas for help lightly." },
+            { zh: "「沉默被加强」角度 → 当孩子得到的回应总是「你别理就好」，他们就学会了「不再告诉父母」——家长成了求助链条上断裂的一环。",
+              en: "\"Reinforced silence\" angle → when children's responses are always \"just ignore it,\" they learn \"not to tell parents anymore\" — and parents become the broken link in the help-seeking chain." }
+          ],
+          bAngles: [
+            { zh: "家长工作坊 → 协会每学期举办一场「认识网络霸凌」家长工作坊，由学校辅导员与受害学生（匿名）现场对话，让家长亲耳听见孩子的真实心声。",
+              en: "Parent workshops → the PTA holds a \"Understanding Cyberbullying\" workshop each semester, with school counsellors and (anonymous) student victims in live dialogue — letting parents hear children's real voices directly." },
+            { zh: "「家长求助清单」 → 协会与辅导员合作设计一张「八步行动清单」，告诉家长在孩子求助时该问什么、不该说什么、何时通报学校或警方。",
+              en: "\"Parent help-seeking checklist\" → the PTA partners with counsellors to design an \"8-step action checklist\" telling parents what to ask, what NOT to say, and when to escalate to school or police when a child seeks help." }
+          ]
+        },
+        // ─────────── eq5: 反映+建议 to 同班同学 ───────────
+        {
+          id: "eq5", type: "scaffold", difficulty: 3,
+          context: {
+            zh: "你的同班好友张文杰最近私下告诉你，他每天目睹班上几位同学嘲讽一位戴助听器的同学，但他始终选择「装作没看见」，因为他怕「自己也会成为下一个被嘲笑的人」。你能体会他的担忧，但也忍不住想——若每个人都选择沉默，受害者要等到什么时候才有人挺身而出？",
+            en: "Your classmate and close friend Zhang Wenjie recently told you privately that he witnesses several classmates mocking a student who wears a hearing aid every day — but he always chooses to \"pretend not to see,\" fearing he would become \"the next one to be mocked.\" You understand his fear, but cannot help wondering: if everyone chooses silence, how long must the victim wait before someone stands up?"
+          },
+          task: {
+            zh: "假设你是中四学生王立宇，请写一封电邮给同班好友张文杰，（a）反映你对他「装作没看见」做法的担忧，并（b）建议你们能一起采取的低风险介入方式。",
+            en: "Assume you are Wang Liyu, a Sec 4 student. Write an email to your classmate and close friend Zhang Wenjie, (a) sharing your concern about his \"pretend not to see\" approach, and (b) suggesting low-risk intervention methods you can take together."
+          },
+          aAngles: [
+            { zh: "「沉默的代价」角度 → 旁观者的沉默并非中立——它是加害者最大的「默许」，让他们觉得「全班都默认嘲笑是OK的」。",
+              en: "\"Cost of silence\" angle → bystander silence is not neutral — it is the perpetrator's biggest \"tacit approval,\" making them think \"the whole class accepts the mockery as okay.\"" },
+            { zh: "「同理心连结」角度 → 那位戴助听器的同学每天进入教室时眼睛望地——若有一天连他自己也放弃，可能就再也不愿来上学了，那是我们整班的损失。",
+              en: "\"Empathy connection\" angle → the classmate with the hearing aid walks into the classroom with eyes downcast every day — if one day he himself gives up, he may never want to come to school again. That would be a loss to the entire class." }
+          ],
+          bAngles: [
+            { zh: "低风险三步介入 → 我们可以（1）下次嘲讽发生时同时走向受害者，自然地跟他聊功课；（2）每天午餐时主动邀请他一起；（3）让他知道至少有「两个人是站在他这边的」。",
+              en: "Low-risk three-step intervention → we can (1) walk towards the victim together the next time mockery occurs and chat about homework naturally; (2) proactively invite him to lunch each day; (3) let him know at least \"two people are on his side.\"" },
+            { zh: "匿名举报合作 → 我们可以用学校的匿名举报系统，一周内分两次提交目击描述（不留IP痕迹），让辅导员有足够证据介入。",
+              en: "Anonymous reporting collaboration → we can use the school's anonymous reporting system to submit witness descriptions twice in one week (without leaving IP traces), giving the counsellor enough evidence to intervene." }
+          ]
+        }
+      ]
+    },
+    essay: {
+      anchor: {
+        question: {
+          zh: "「严刑峻法是遏制校园霸凌最有效的办法。」你同意吗？为什么？",
+          en: "\"Strict punishment is the most effective way to curb school bullying.\" Do you agree? Why?"
+        },
+        tone: {
+          category: "绝对语气 Absolute",
+          keywordHint: "最有效／唯一／只有",
+          strategyHint: "建议不完全同意 Partial disagreement"
+        },
+        openingHTML: `\u3000\u30002026年4月，新加坡教育部推出了更严的校园霸凌处分框架——首次严重违规可被停学一至三天、操行降级；高小及以上男生在加重情节下可处鞭刑一至两鞭。这项政策让一种声音愈发响亮：「严刑峻法是遏制校园霸凌最有效的办法。」对此，<strong>我不完全同意这种看法</strong>。我认为，严刑确实能产生不可或缺的威慑力，但若没有修复式正义与全面性的心理辅导同行，再重的处分也只能把霸凌「赶到看不见的角落」，无法从根本上化解这场代际危机。`,
+        openingEn: "In April 2026, Singapore's Ministry of Education rolled out a stricter framework for school bullying — first-time serious offenders may face 1-3 days suspension, conduct grade downgrade, with upper-primary boys+ potentially receiving 1-2 strokes of the cane in aggravated cases. The policy has amplified one voice: \"Strict punishment is the most effective way to curb school bullying.\" I <strong>partially disagree</strong>. I believe strict punishment indeed delivers an indispensable deterrent, but without restorative justice and comprehensive psychological counselling walking alongside, even the heaviest penalties can only push bullying \"into unseen corners\" — and cannot resolve this intergenerational crisis at its roots.",
+        bodyParagraphs: [
+          {
+            title: "诚然……（同意）— 严刑确实能产生强大的威慑力",
+            titleEn: "Admittedly… (Agree) — strict punishment does deliver strong deterrence",
+            rows: [
+              { label: "立场", pTop: "P", pBot: "立场 Stand",
+                zh: "诚然，严刑峻法在遏制校园霸凌上确实能产生强大的威慑作用，在这一点上我同意题目的说法。",
+                en: "Admittedly, strict punishment does deliver strong deterrence in curbing school bullying — on this point I agree with the statement.",
+                starter: "诚然，……确实能产生强大的……，在这一点上我同意……",
+                starterEn: "Admittedly, … does deliver strong …, on this point I agree with …" },
+              { label: "理由", pTop: "E", pBot: "理由 Reason",
+                zh: "这是因为，明确而一致的处分（包括停学与鞭刑）能让潜在的加害者意识到「霸凌不再只是被记小过」，从而在出手之前三思——这是过去「轻处分」时代所无法做到的。",
+                en: "This is because clear and consistent penalties (including suspension and caning) make potential perpetrators realise that \"bullying is no longer just a minor demerit,\" prompting them to pause before acting — something the previous \"light-penalty era\" could not achieve.",
+                starter: "这是因为，……能让……意识到「……」，从而……——这是……所无法做到的。",
+                starterEn: "This is because … makes … realise \"…\", thereby … — something … could not achieve." },
+              { label: "证据", pTop: "E", pBot: "证据 Evidence",
+                zh: "事实证明，2026年4月教育部宣布更严框架后，本地教师工会随即指出：「这是给了第一线老师一份真正的执法依据。」此前在「教育优先于惩罚」的旧理念下，许多严重案件被淡化处理，受害者及其家属长期感到求助无门。",
+                en: "The evidence speaks: after MOE's April 2026 announcement, the local teachers' union immediately noted: \"This finally gives frontline teachers a genuine enforcement basis.\" Under the previous \"education before punishment\" doctrine, many serious cases were downplayed, leaving victims and their families feeling there was nowhere to turn.",
+                starter: "事实证明，……后，……随即指出：「……」。此前……，许多……被……，……长期……",
+                starterEn: "The evidence speaks: after …, … immediately noted: \"…\". Before that …, many … were …, … long …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "由此可见，严刑确实是遏制校园霸凌不可或缺的「第一道防线」。",
+                en: "This shows that strict punishment is indeed the indispensable \"first line of defence\" against school bullying.",
+                starter: "由此可见，……确实是……不可或缺的「……」。",
+                starterEn: "This shows that … is indeed the indispensable \"…\"." },
+            ]
+          },
+          {
+            title: "然而……（反对·1）— 单纯惩罚无法解决霸凌的根源",
+            titleEn: "However… (Disagree·1) — punishment alone cannot resolve bullying's root",
+            rows: [
+              { label: "立场", pTop: "P", pBot: "立场 Stand",
+                zh: "然而，我更认为「严刑峻法是最有效的办法」这一说法忽略了一个根本事实：霸凌的根源往往不在加害者本人，而在他们所承受的心理创伤、家庭破裂或社交焦虑。",
+                en: "However, I further believe the phrase \"strict punishment is the most effective\" overlooks a fundamental truth: bullying's roots often do not lie in the perpetrator alone, but in psychological trauma, family breakdown or social anxiety they endure.",
+                starter: "然而，我更认为「……」忽略了一个根本事实：……往往不在……，而在……",
+                starterEn: "However, I further believe \"…\" overlooks a fundamental truth: … often lies not in …, but in …" },
+              { label: "理由", pTop: "E", pBot: "理由 Reason",
+                zh: "这是因为，加害者若没有机会面对自己行为的深层原因、聆听受害者的真实感受，再重的鞭刑也只是让他「记住痛」，而无法让他「明白错」——一离开校园，霸凌就会以更隐蔽的方式延续。",
+                en: "This is because if perpetrators have no chance to confront the deeper causes of their behaviour, no chance to hear the victims' real feelings, even the heaviest caning only teaches them to \"remember the pain\" — not to \"understand the wrong.\" Once they leave school, bullying will continue in more hidden forms.",
+                starter: "这是因为，……若没有……、……，再重的……也只是让他「……」，而无法让他「……」——一……，就会……",
+                starterEn: "This is because if … has no … or …, even the heaviest … only teaches him \"…\" — not \"…\". Once …, … will …" },
+              { label: "证据", pTop: "E", pBot: "证据 Evidence",
+                zh: "心理学家陈志强博士在2025年发表的研究指出，本地中学加害学生中，逾六成承受着不同程度的家庭功能失调或心理压力——他们的「霸凌行为」往往是「向外投射的求救信号」。若只惩罚而不修复，加害者只会从校园霸凌转向匿名网络霸凌——近年「@SG_school_tea」之类匿名Telegram频道的兴起，就是赤裸裸的警讯。",
+                en: "Psychologist Dr Tan Chee Keong's 2025 research shows that over 60% of student perpetrators in local secondary schools endure varying degrees of family dysfunction or psychological stress — their \"bullying behaviour\" is often an \"externalised distress signal.\" If we punish without restoring, perpetrators will simply shift from school bullying to anonymous cyberbullying — the recent rise of anonymous Telegram channels like \"@SG_school_tea\" is the starkest warning.",
+                starter: "……研究指出，……逾……承受着……——他们的「……」往往是「……」。若只……而不……，……只会……——……就是……",
+                starterEn: "Research shows … over … endure … — their \"…\" is often \"…\". If we … without …, … will only … — … is …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "因此，单纯依靠严刑峻法不但无法治本，反而可能让霸凌以更隐蔽、更难追查的形式继续存在。",
+                en: "Therefore, relying solely on strict punishment not only fails to treat the root cause but may also let bullying persist in more hidden, harder-to-trace forms.",
+                starter: "因此，单纯依靠……不但无法治本，反而可能让……以……、……的形式继续存在。",
+                starterEn: "Therefore, relying solely on … not only fails to treat the root cause but may also let … persist in … forms." },
+            ]
+          },
+          {
+            title: "更进一步……（反对·2）— 真正的解方是「严刑＋修复＋预防」三管齐下",
+            titleEn: "Furthermore… (Disagree·2) — the true solution is \"discipline + restoration + prevention\" in parallel",
+            rows: [
+              { label: "立场", pTop: "P", pBot: "立场 Stand",
+                zh: "更进一步，我认为真正能遏制校园霸凌的，是「严刑、修复式正义、预防教育」三管齐下的全方位策略。",
+                en: "Furthermore, I believe what truly curbs school bullying is a comprehensive strategy of \"discipline, restorative justice and prevention education\" operating in parallel.",
+                starter: "更进一步，我认为真正能……的，是「……、……、……」三管齐下的……",
+                starterEn: "Furthermore, I believe what truly … is a comprehensive strategy of \"…, … and …\" operating in parallel." },
+              { label: "理由", pTop: "E", pBot: "理由 Reason",
+                zh: "这是因为，三管之中，每一管都解决严刑无法独自解决的问题——修复式正义让加害者真正悔改，预防教育让潜在加害者从源头打消念头，而严刑则承担「最后底线」的角色。",
+                en: "This is because each of these three approaches addresses what strict punishment alone cannot — restorative justice drives genuine remorse in perpetrators; prevention education stops potential perpetrators at the source; and strict punishment plays its role as the \"final bottom line.\"",
+                starter: "这是因为，……，每一……都解决……无法独自解决的问题——……让……，……让……，而……则承担「……」的角色。",
+                starterEn: "This is because each of these … addresses what … alone cannot — … drives …, … stops … at the source, while … plays its role as \"…\"." },
+              { label: "证据", pTop: "E", pBot: "证据 Evidence",
+                zh: "就拿2025年试行修复式正义计划的圣公会中学来说，参与该计划的加害学生在两年内的再犯率仅为7%，远低于全国平均的23%；同时受害者反馈「真正感觉到对方的歉意」的比例高达八成五。这正是「严刑＋修复」组合的力量。",
+                en: "Take St Andrew's Secondary School, which trialled a restorative justice programme in 2025: perpetrators in the programme had a two-year reoffending rate of just 7%, far below the national average of 23%; meanwhile, 85% of victims reported \"genuinely feeling the perpetrator's remorse.\" This is precisely the power of the \"discipline + restoration\" combination.",
+                starter: "就拿……来说，……仅为……，远低于……；同时……高达……。这正是「……」组合的力量。",
+                starterEn: "Take … as an example: … was just …, far below …; meanwhile … reached …. This is precisely the power of \"…\" combination." },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，把校园霸凌的解方简化为「严刑峻法」，等于放弃了真正能根治问题的两根关键支柱。",
+                en: "Therefore, reducing the solution for school bullying to \"strict punishment\" amounts to abandoning the two key pillars that can truly heal the problem.",
+                starter: "所以，把……简化为「……」，等于放弃了……的……支柱。",
+                starterEn: "Therefore, reducing … to \"…\" amounts to abandoning the … pillars of …" },
+            ]
+          }
+        ],
+        conclusionZh: "\u3000\u3000综上所述，我不完全同意「严刑峻法是遏制校园霸凌最有效的办法」这一看法。严刑确实是不可或缺的「第一道防线」，能产生强大的威慑作用；但若没有修复式正义让加害者真正悔改、没有预防教育从源头打消念头，再重的处分也只能让霸凌「转入地下」，而非真正消失。我认为，新加坡今后的政策方向，应当是「严刑、修复、预防」三管齐下——让每一所学校都成为一片让加害者愿意悔改、让受害者愿意求助、让旁观者愿意挺身的安全空间。唯有如此，这一代年轻人才不必再用沉默来保护自己。",
+        conclusionEn: "In conclusion, I partially disagree with the view that \"strict punishment is the most effective way to curb school bullying.\" Strict punishment is indeed an indispensable \"first line of defence,\" delivering strong deterrence; but without restorative justice driving genuine remorse, and without prevention education stopping perpetration at the source, even the heaviest penalty can only push bullying \"underground,\" not truly dissolve it. I believe Singapore's policy direction going forward should be \"discipline, restoration, prevention\" operating in parallel — making every school a safe space where perpetrators are willing to repent, victims willing to seek help, and bystanders willing to stand up. Only then will this generation of youths no longer need to protect themselves with silence."
+      },
+      practice: [
+        {
+          id: "aq1", type: "model", difficulty: 1,
+          zh: "「严刑峻法是遏制校园霸凌最有效的办法。」你同意吗？为什么？",
+          en: "\"Strict punishment is the most effective way to curb school bullying.\" Do you agree? Why?",
+          tone: "绝对语气 Absolute（最／唯一／只有）· 建议不完全同意",
+          useAnchor: true
+        },
+        {
+          id: "aq2", type: "scaffold", difficulty: 2,
+          zh: "网络霸凌比传统校园霸凌的危害更大。你同意吗？为什么？",
+          en: "Cyberbullying is more harmful than traditional school bullying. Do you agree? Why?",
+          tone: "一般语气 General（你同意吗？／你认为……）· 建议完全同意",
+          hookType: "对比 — 校园霸凌与网络霸凌两种伤害的根本不同", hookTypeEn: "Compare — two fundamentally different forms of harm: school bullying vs cyberbullying",
+          stand: "完全同意。网络霸凌在时间、空间与人数三方面的伤害都远超传统校园霸凌", standEn: "Full agreement. Cyberbullying's harm exceeds traditional bullying in time, space and audience reach",
+          para1: "同意：「无所遁形」——网络霸凌跟随受害者回家、入睡、深夜醒来，没有「下课就解脱」的喘息空间", para1En: "Agree: \"nowhere to hide\" — cyberbullying follows victims home, into sleep, into midnight awakenings, with no \"school's-out relief\"",
+          para2: "同意：「永远的伤口」——一则贴文可被截图无限转发，多年后仍能轻易搜出，对受害者构成永久性的心理创伤", para2En: "Agree: \"permanent wound\" — one post can be screenshotted and re-shared infinitely, easily searchable years later, inflicting permanent psychological trauma",
+          para3: "同意：「围观放大」——传统霸凌的目击者有限，网络霸凌却能在几小时内被数千人传阅嘲笑，让受害者感到「全世界都在嘲笑我」", para3En: "Agree: \"amplified public spectacle\" — traditional bullying has limited witnesses, but cyberbullying can spread to thousands within hours, making victims feel \"the whole world is mocking me\""
+        },
+        {
+          id: "aq3", type: "scaffold", difficulty: 2,
+          zh: "面对同侪压力做出违心的决定，主要责任在青少年自己。你同意吗？为什么？",
+          en: "When youths make decisions against their will due to peer pressure, the responsibility lies primarily with the youths themselves. Do you agree? Why?",
+          tone: "一般语气 General（你同意吗？／你认为……）· 建议完全不同意",
+          hookType: "故事 — 一个被「同侪压力」推下电子烟的中学生", hookTypeEn: "Story — a secondary student pushed into vaping by peer pressure",
+          stand: "完全不同意。青少年的大脑发育、社会环境与家庭支援三方面，决定他们难以独自抵抗", standEn: "Full disagreement. Adolescent brain development, social environment and family support together make it difficult to resist alone",
+          para1: "不同意：脑科学研究显示，青少年大脑负责自控的前额叶要到25岁才成熟——把抵抗同侪压力的全部责任压在中学生身上本就不公平", para1En: "Disagree: neuroscience shows the prefrontal cortex responsible for self-control matures only at 25 — placing the entire burden of resisting peer pressure on secondary students is itself unjust",
+          para2: "不同意：当一整个班的氛围都「不参与就被孤立」时，单一个体几乎不可能逆向而行——这是社会结构问题，不是个人意志问题", para2En: "Disagree: when an entire class atmosphere becomes \"don't participate, get isolated,\" a single individual finds it nearly impossible to reverse course — this is a structural problem, not an individual willpower problem",
+          para3: "不同意：把责任完全归于青少年，等于让学校、家长与社会回避了「营造健康同伴文化」的真正责任", para3En: "Disagree: assigning the entire responsibility to youths lets schools, parents and society avoid their real responsibility of \"creating healthy peer cultures\""
+        },
+        {
+          id: "aq4", type: "scaffold", difficulty: 3,
+          zh: "只有恢复鞭刑，才能真正吓阻校园霸凌行为。你同意吗？为什么？",
+          en: "Only by reinstating caning can we truly deter school bullying. Do you agree? Why?",
+          tone: "绝对语气 Absolute（只有／唯一／才）· 建议不完全同意",
+          hookType: "定义 — 何谓「真正吓阻」？", hookTypeEn: "Definition — what is \"true deterrence\"?",
+          stand: "不完全同意。鞭刑确实有威慑力，但「真正吓阻」需要更全面的方法", standEn: "Partial disagreement. Caning does deter, but \"true deterrence\" requires a more comprehensive approach",
+          para1: "同意：明确而严厉的处分（包括鞭刑）确实能让冲动型霸凌者三思而行——这是2026年4月新框架的核心逻辑", para1En: "Agree: clear and stern penalties (including caning) do make impulsive bullies think twice — this is the core logic of the April 2026 framework",
+          para2: "不同意：鞭刑无法吓阻匿名网络霸凌，因为加害者根本不会被抓——若新框架不同步处理网络空间，等于「打一处，漏百处」", para2En: "Disagree: caning cannot deter anonymous cyberbullying because perpetrators will never be caught — without simultaneously addressing online spaces, the framework \"strikes one, misses a hundred\"",
+          para3: "不同意：从他国经验看（如澳洲），最有效的吓阻其实是「心理辅导＋同伴守护＋数码同理心教育」的组合——单一刑罚的效果反而有限", para3En: "Disagree: international evidence (e.g., Australia) shows the most effective deterrence is in fact \"counselling + peer guardians + digital empathy education\" combined — a single penalty has limited effect"
+        },
+        {
+          id: "aq5", type: "scaffold", difficulty: 3,
+          zh: "在校园霸凌中，旁观者的责任不亚于加害者。你同意吗？为什么？",
+          en: "In school bullying, bystanders bear no less responsibility than perpetrators. Do you agree? Why?",
+          tone: "一般语气 General（你同意吗？／你认为……）· 建议不完全同意",
+          hookType: "比喻 — 旁观者的沉默有如「无形的鼓掌」", hookTypeEn: "Metaphor — bystander silence is like \"invisible applause\"",
+          stand: "不完全同意。旁观者的沉默确实助长霸凌，但责任的本质与加害者仍有不同", standEn: "Partial disagreement. Bystander silence does enable bullying, but the nature of responsibility differs from perpetrators",
+          para1: "同意：旁观者的沉默并非中立——它是加害者最大的「默许」，让他们觉得「全班都默认嘲笑是OK的」", para1En: "Agree: bystander silence is not neutral — it is the perpetrator's biggest \"tacit approval,\" making them think \"the whole class accepts the mockery as okay\"",
+          para2: "不同意：旁观者承担的是「未尽帮助义务」的道德责任，而加害者承担的是「主动施加伤害」的直接责任——两者性质不同，不能简单等同", para2En: "Disagree: bystanders bear the moral responsibility of \"failing in their duty to help,\" while perpetrators bear the direct responsibility of \"actively inflicting harm\" — these are different in nature and cannot be simply equated",
+          para3: "不同意：把责任「不亚于」加害者会令很多旁观者因恐惧报复而完全退出——更可行的方向是「介入的低风险路径」，而非道德绑架", para3En: "Disagree: framing bystander responsibility as \"no less than\" perpetrators may cause many to retreat entirely from fear of retaliation — a more workable direction is \"low-risk intervention paths,\" not moral coercion"
+        }
+      ]
+    },
+    reading: {
+      passages: [
+        // ─────────── PASSAGE 1: 论说文 — Why bullying matters ───────────
+        {
+          title: "短文一：校园霸凌不是「小孩之间的小事」 Passage 1: School Bullying is Not \"Just Kids Being Kids\"",
+          marks: 17,
+          textZh: [
+            "\u3000\u3000有些大人面对校园霸凌的事件时，会下意识地说一句：「这只是孩子之间的小摩擦，长大就好。」然而，新加坡教育部的最新数据告诉我们一个更冷峻的事实——从2021到2025年，本地中学平均每千名学生每年就有8起霸凌案例，比前一个五年的6起明显上升。这绝不是「小孩子的玩闹」可以解释的。",
+            "\u3000\u3000霸凌之所以与「玩闹」截然不同，关键在于「反复」与「有意图」两点。教育部明确界定，一次性的不当言行属于「伤害性行为」（hurtful behaviour），而反复、有针对性地造成伤害才构成「霸凌」（bullying）。一句无心的玩笑可以原谅，但如果三个月、半年地针对同一个人，那已经超越了「玩笑」的范畴，进入了「持续性精神虐待」的领域。",
+            "\u3000\u3000更值得我们警惕的是网络霸凌的兴起。当传统霸凌在下课铃响后还能给受害者一点喘息空间时，网络霸凌却跟着他们回家、入睡、深夜醒来——一则贴文可被截图无限转发，多年后仍能被搜出。本地研究显示，受过网络霸凌的青少年出现焦虑、抑郁与睡眠问题的比例，比未受影响的同龄人高出两至三倍。",
+            "\u3000\u3000正是基于这些考量，新加坡教育部于2026年4月15日推出更严的处分框架：首次严重违规可被停学一至三天、操行降级；高小及以上男生在加重情节下，可处鞭刑一鞭；非常严重违规则可处停学三至五天，最多两鞭。此举把霸凌处分与吸食电子烟挂钩，传达了「霸凌同样零容忍」的明确社会信号。",
+            "\u3000\u3000然而，刑罚不是终点，而是起点。真正的解方还需要修复式正义让加害者面对自己的行为后果、心理辅导让受害者重建安全感、预防教育让旁观者敢于挺身。校园霸凌从来不是「小孩之间的小事」——它是我们整个社会必须共同回应的代际课题。",
+          ],
+          textEn: [
+            "When confronted with school bullying, some adults reflexively say: \"It's just minor scuffles between children, they'll grow out of it.\" Yet MOE's latest data tells us a starker truth — from 2021 to 2025, local secondary schools recorded an average of 8 bullying cases per 1,000 students annually, a notable rise from 6 in the preceding five years. This can no longer be explained away as \"kids playing around.\"",
+            "What makes bullying fundamentally different from \"playing\" lies in two words: \"repeated\" and \"intentional.\" MOE clearly defines a one-off inappropriate act as \"hurtful behaviour,\" while repeated, targeted harm constitutes \"bullying.\" An unthinking joke can be forgiven, but if it targets the same person for three months or half a year, it has crossed beyond \"joking\" into the realm of \"sustained psychological abuse.\"",
+            "Of even greater concern is the rise of cyberbullying. While traditional bullying gives victims a moment to breathe after the dismissal bell, cyberbullying follows them home, into sleep, into midnight awakenings — one post can be screenshotted and re-shared infinitely, easily searchable years later. Local research shows adolescents who have experienced cyberbullying are 2-3 times more likely to suffer anxiety, depression and sleep disorders than peers who have not.",
+            "It is precisely on these considerations that Singapore's Ministry of Education rolled out its stricter framework on 15 April 2026: first-time serious offenders may face 1-3 days suspension and conduct grade downgrade; upper-primary boys+ may receive 1 cane stroke with aggravating factors; very serious offences may incur 3-5 days suspension and up to 2 strokes. The move aligns bullying penalties with vaping offences, sending a clear social signal: \"zero tolerance for bullying.\"",
+            "Yet punishment is not the destination — it is the starting point. The true solution still requires restorative justice to make perpetrators confront the consequences of their actions, psychological counselling to help victims rebuild a sense of safety, and prevention education to embolden bystanders to stand up. School bullying has never been \"just kids being kids\" — it is an intergenerational issue our entire society must answer together.",
+          ],
+          questions: [
+            {
+              id: "p1q1", type: "复述 Retrieving", marks: 2,
+              zh: "根据第1段，新加坡教育部最新的霸凌数据有何变化？请简要说明。（2分）",
+              en: "According to Paragraph 1, what change does MOE's latest bullying data show? Briefly explain. (2m)",
+              modelZh: "从2021到2025年，本地中学平均每千名学生每年有8起霸凌案例（1分），比前一个五年的6起明显上升（1分）。",
+              modelEn: "From 2021 to 2025, local secondary schools recorded an average of 8 bullying cases per 1,000 students annually (1m), a notable rise from 6 in the preceding five years (1m).",
+              technique: "复述题找关键字→原文定位→改写抄答。Retrieve keywords, locate in passage, rephrase answer."
+            },
+            {
+              id: "p1q2", type: "重整 Reorganising", marks: 4,
+              zh: "根据全文，作者认为校园霸凌不是「小孩之间的小事」的理由有哪些？请按要点说明（4分）。",
+              en: "According to the entire passage, what reasons does the author give for why school bullying is not \"just kids being kids\"? Outline by points (4m).",
+              modelZh: "首先，本地中学每千名学生年均霸凌案例已升至8起，呈持续上升趋势（1分）。其次，霸凌的本质是「反复且有意图地造成伤害」，已超越「玩闹」的范畴，进入持续性精神虐待的领域（1分）。再者，网络霸凌使受害者无处可逃，焦虑、抑郁与睡眠问题的比例比未受影响者高出两至三倍（1分）。最后，教育部已在2026年4月推出更严框架，把霸凌与吸食电子烟挂钩，凸显其严重性（1分）。",
+              modelEn: "First, local secondary schools' annual bullying rate has risen to 8 cases per 1,000 students with a sustained upward trend (1m). Second, bullying by nature is \"repeated and intentional harm\" — it has crossed beyond \"playing\" into the realm of sustained psychological abuse (1m). Third, cyberbullying leaves victims nowhere to escape, with anxiety, depression and sleep problems at 2-3 times the rate of unaffected peers (1m). Finally, MOE has rolled out the stricter April 2026 framework aligning bullying with vaping offences, highlighting its severity (1m).",
+              technique: "重整题按结构要点整合全文论据。Reorganise by structural points across the passage."
+            },
+            {
+              id: "p1q3", type: "解释 Explaining", marks: 2,
+              zh: "请解释「刑罚不是终点，而是起点」（第5段）在文中的意思。（2分)",
+              en: "Explain the meaning of \"punishment is not the destination — it is the starting point\" (Paragraph 5) in context. (2m)",
+              modelZh: "这句话指的是，严刑虽然能起到震慑作用，却不是解决霸凌问题的最终办法（1分）；真正要根治霸凌，还必须搭配修复式正义、心理辅导与预防教育，让加害者悔改、受害者康复、旁观者敢于挺身（1分）。",
+              modelEn: "This means that although strict punishment serves as a deterrent, it is not the ultimate solution to bullying (1m); to truly resolve bullying, it must be combined with restorative justice, psychological counselling and prevention education — driving perpetrator remorse, victim recovery, and bystander courage (1m).",
+              technique: "解释题写出句子的字面与深层含义。Explain both literal and deeper meanings in context."
+            },
+            {
+              id: "p1q4", type: "评鉴 Evaluating", marks: 4,
+              zh: "作者主要运用了哪几种论证方法来说明「校园霸凌不是小事」？请举出至少两种并说明其作用（4分）。",
+              en: "Which argumentation methods does the author primarily use to argue \"school bullying is not a small matter\"? Identify at least two and explain each method's purpose (4m).",
+              modelZh: "作者主要运用了两种论证方法（1分）。第一，作者使用了数据论证法——具体引用教育部统计「8起对6起」与本地研究「焦虑高出两至三倍」的数据，让读者直观看到霸凌的客观规模与严重影响（1分）。第二，作者使用了概念区分论证法——通过界定「伤害性行为」与「霸凌」的明确差异，让读者厘清「玩闹」与「持续性精神虐待」的本质不同（1分）。两种方法相辅相成，数据让论点具有客观说服力，概念区分让读者理解事件背后的本质，使论证既严谨又有深度（1分）。",
+              modelEn: "The author primarily uses two argumentation methods (1m). First, data argumentation — citing specific MOE statistics \"8 vs 6 per 1,000\" and local research \"2-3 times higher anxiety,\" letting readers directly see the objective scale and serious impact of bullying (1m). Second, conceptual-distinction argumentation — by defining the clear difference between \"hurtful behaviour\" and \"bullying,\" the author helps readers grasp the fundamental difference between \"playing\" and \"sustained psychological abuse\" (1m). Together, these methods reinforce each other — data lends objective persuasive force, while conceptual distinction reveals essence — making the argument both rigorous and substantive (1m).",
+              technique: "评鉴题用「立场 + 论据」格式，并指明论证类型。Evaluate with stand + evidence; specify argumentation type."
+            },
+            {
+              id: "p1q5", type: "伸展 Elaborating", marks: 5,
+              zh: "作者认为：「校园霸凌从来不是『小孩之间的小事』——它是我们整个社会必须共同回应的代际课题。」你同意这种把霸凌「全民化」的看法吗？请结合个人或身边的经历加以说明。（5分）",
+              en: "The author claims: \"School bullying has never been 'just kids being kids' — it is an intergenerational issue our entire society must answer together.\" Do you agree with this \"all-of-society\" framing? Elaborate with examples from your own life or surroundings. (5m)",
+              modelZh: "我同意作者的看法。<br><br>这是因为，霸凌伤害的不只是个别学生，而是整个学习环境与社会信任。当受害者长期无人帮助时，他们对学校、对他人、甚至对社会都会失去信心（1分，解释一）。同时，旁观者若长期目睹却不介入，也会内化「沉默是安全的」这种态度，长大后可能在职场、社区里继续延续这种「冷漠文化」（1分，解释二）。<br><br>以我自己的经历为例。<u>之前</u>，我曾经在中二时目睹班上几位同学嘲讽一位戴助听器的同学，但我选择「装作没看见」，因为怕自己变成下一个目标（1分，之前）。<u>后来</u>，那位同学请了一周病假，我才意识到自己的沉默其实是默许了嘲讽，于是我私下找了两位好友，一起在午餐时主动邀请他坐我们这一桌（1分，过程）。<u>最后</u>，那位同学在两周内重新开口与人聊天，嘲讽的同学也明显减少了行为，因为他们发现「不是全班都默认嘲笑是OK的」（1分，之后）。<br><br>所以，我认为霸凌确实是需要全民——包括学生、父母、学校、社会——共同回应的代际课题。",
+              modelEn: "I agree with the author.<br><br>This is because bullying harms not only individual students but the entire learning environment and social trust. When victims go unhelped for long periods, they lose faith in school, in others, and even in society itself (1m, reason 1). At the same time, bystanders who repeatedly witness without intervening internalise the attitude that \"silence is safe\" — they may grow up to perpetuate this \"culture of indifference\" in workplaces and communities (1m, reason 2).<br><br>Taking my own experience. <u>Before</u>: in Sec 2, I once witnessed several classmates mocking a student who wore a hearing aid, but I chose to \"pretend not to see\" — fearing I might become the next target (1m, before). <u>During</u>: when that classmate took a week of medical leave, I realised my silence had effectively endorsed the mockery; I quietly approached two friends and we proactively invited him to our table at lunch (1m, during). <u>After</u>: within two weeks, that classmate began speaking with people again, and the mocking classmates clearly reduced their behaviour — they had discovered \"the whole class does not silently accept mockery\" (1m, after).<br><br>Therefore, I believe bullying is indeed an intergenerational issue that requires all of us — students, parents, schools, and society — to answer together.",
+              technique: "伸展题 5B = 立场（0分）+ 解释（2分）+ 个人例子之前/过程/之后（3分）。Elaborating 5B = stand (0m) + reasoning (2m) + personal example before/during/after (3m)."
+            }
+          ]
+        },
+        // ─────────── PASSAGE 2: 记叙文 — A bystander's awakening ───────────
+        {
+          title: "短文二：那个我没有挺身而出的下午 Passage 2: The Afternoon I Did Not Stand Up",
+          marks: 17,
+          textZh: [
+            "\u3000\u3000中三那一年，我永远忘不了那个星期三的下午。",
+            "\u3000\u3000下午两点四十分，体育课刚结束。我和几位同学回到课室换衣服，看见班上三位最受欢迎的女生围着一位名叫小蔓的转学生。小蔓不擅长华语，每次回答老师时口音都引来一些低低的笑声，但今天却不一样——其中一位女生拿着小蔓的运动鞋，故意丢进了厕所的马桶里，三人哈哈大笑。小蔓的脸瞬间涨红，眼睛在课室里打转，目光与我对上的那一瞬间，我下意识地把头别开了。",
+            "\u3000\u3000接下来的一个小时里，我反复告诉自己：这不关我的事，我也不喜欢被卷入，小蔓自己应该懂得怎么处理。但当我走到课室门口时，看见小蔓蹲在马桶旁边，泪水一滴一滴地落在湿透的鞋面上——那一刻，我心里那根「这不关我的事」的线，「啪」的一声断了。",
+            "\u3000\u3000第二天，小蔓没来上课。第三天，第四天，第五天，她都没来。一个星期后，班主任宣布她转去了另一所学校。从那以后，那个空着的位子一直在我心里。我清楚知道：是我，和当时所有选择「装作没看见」的同学，把小蔓推出了我们的校园。",
+            "\u3000\u3000多年后，我在一场反霸凌讲座上，听到讲者说：「旁观者的沉默，不是中立——它是加害者最大的默许。」那一刻，我终于明白：那个下午我别开头的那一秒，其实就是我用沉默对小蔓投下的「赞成票」。这场迟到了多年的醒悟，是我后来主动加入「同伴守护员」计划的真正起点。",
+          ],
+          textEn: [
+            "In my Sec 3 year, I will never forget that Wednesday afternoon.",
+            "At 2:40 p.m., PE class had just ended. A few classmates and I returned to the classroom to change. We saw the three most popular girls in our class surrounding a transfer student named Xiaoman. Xiaoman wasn't strong at Chinese — every time she answered the teacher, her accent drew quiet laughter. But today was different. One of the girls had taken Xiaoman's PE shoe and deliberately thrown it into a toilet bowl. The three of them roared with laughter. Xiaoman's face flushed instantly red; her eyes circled the classroom — and in the moment our eyes met, I instinctively turned my head away.",
+            "For the next hour, I told myself repeatedly: this isn't my business, I don't want to be dragged in, Xiaoman herself should know how to handle it. But when I reached the classroom door, I saw her crouching beside the toilet, her tears falling drop by drop onto the soaked shoe — in that instant, the string in my heart marked \"this isn't my business\" snapped, with an audible click.",
+            "The next day, Xiaoman did not come to school. The third day, the fourth day, the fifth — she did not come. A week later, our form teacher announced she had transferred to another school. From that day on, that empty seat stayed in my heart. I knew clearly: it was me, and all the classmates who chose to \"pretend not to see,\" who pushed Xiaoman out of our school.",
+            "Years later, at an anti-bullying talk, I heard a speaker say: \"Bystander silence is not neutrality — it is the perpetrator's greatest tacit approval.\" In that moment I finally understood: the second I turned my head away that afternoon was, in fact, the silent \"yes-vote\" I cast against Xiaoman. That long-delayed awakening is the true origin of my later decision to join the \"Peer Guardians\" programme.",
+          ],
+          questions: [
+            {
+              id: "p2q1", type: "复述 Retrieving", marks: 2,
+              zh: "根据第2段，三位女生对小蔓做了什么？请简要说明。（2分）",
+              en: "According to Paragraph 2, what did the three girls do to Xiaoman? Briefly explain. (2m)",
+              modelZh: "三位女生围着小蔓，其中一位拿着小蔓的运动鞋（1分），故意把鞋丢进厕所的马桶里，三人哈哈大笑（1分）。",
+              modelEn: "The three girls surrounded Xiaoman; one of them took Xiaoman's PE shoe (1m) and deliberately threw it into a toilet bowl, while all three laughed (1m).",
+              technique: "复述题找关键字→原文定位→改写抄答。Retrieve keywords, locate in passage, rephrase answer."
+            },
+            {
+              id: "p2q2", type: "重整 Reorganising", marks: 4,
+              zh: "根据全文，「我」对自己当年的沉默有哪些不同阶段的反应？请按时间顺序整理（4分）。",
+              en: "According to the entire passage, how did \"I\" react to my own silence over time? Organise chronologically (4m).",
+              modelZh: "首先，目击事件的当下，「我」选择把头别开，下意识地逃避卷入（1分）。其次，接下来的一小时里，「我」反复以「这不关我的事」、「小蔓自己应该懂得处理」等理由说服自己合理化沉默（1分）。再者，看见小蔓蹲在马桶旁哭泣后，「我」心里「这不关我的事」的线断裂，意识到自己的错（1分）。最后，多年后听到讲座上「旁观者的沉默不是中立」的话，「我」彻底醒悟，并主动加入「同伴守护员」计划，把愧疚转化为行动（1分）。",
+              modelEn: "First, at the moment of witnessing, \"I\" chose to turn my head away, instinctively avoiding involvement (1m). Second, for the next hour, \"I\" repeatedly rationalised my silence with reasons like \"this isn't my business\" and \"Xiaoman should handle it herself\" (1m). Third, upon seeing Xiaoman crouched beside the toilet weeping, the string of \"this isn't my business\" snapped in my heart and I realised my wrong (1m). Finally, years later at the anti-bullying talk, hearing \"bystander silence is not neutrality,\" I fully awakened and proactively joined the \"Peer Guardians\" programme — transforming guilt into action (1m).",
+              technique: "重整题按时间顺序整理人物心理变化。Reorganise by chronological order tracing character's psychological change."
+            },
+            {
+              id: "p2q3", type: "解释 Explaining", marks: 2,
+              zh: "请解释「那个下午我别开头的那一秒，其实就是我用沉默对小蔓投下的『赞成票』」（第5段）在文中的意思。（2分）",
+              en: "Explain the meaning of \"the second I turned my head away that afternoon was, in fact, the silent 'yes-vote' I cast against Xiaoman\" (Paragraph 5) in context. (2m)",
+              modelZh: "这句话指的是，「我」在事件中选择沉默不介入，等于在无形中默许了加害者的行为（1分）；正是这种默许让加害者觉得「全班都不反对」，从而助长了她们对小蔓的伤害，使「我」成为了无形的「共犯」之一（1分）。",
+              modelEn: "This means that \"I\" — by choosing silence and non-intervention — silently endorsed the perpetrators' actions (1m); this tacit approval led the perpetrators to feel \"the whole class does not object,\" enabling further harm to Xiaoman and making \"me\" one of the invisible \"accomplices\" (1m).",
+              technique: "解释题写出比喻句的字面与深层含义。Explain both literal and deeper meanings of the metaphor in context."
+            },
+            {
+              id: "p2q4", type: "评鉴 Evaluating", marks: 4,
+              zh: "作者主要运用了哪几种描写方法来塑造小蔓的形象与「我」的心理？请举出至少两种并说明其作用（4分）。",
+              en: "Which descriptive techniques does the author primarily use to portray Xiaoman and \"my\" inner state? Identify at least two and explain each technique's purpose (4m).",
+              modelZh: "作者主要运用了两种描写手法（1分）。第一，作者使用了细节描写——「小蔓的脸瞬间涨红，眼睛在课室里打转」、「泪水一滴一滴地落在湿透的鞋面上」——这些极具画面感的细节让读者直接感受到小蔓的无助与屈辱（1分）。第二，作者使用了心理描写——「我反复告诉自己：这不关我的事」、「我心里那根『这不关我的事』的线，啪的一声断了」——这些内心独白让读者真切体会到「我」从自我合理化到良心觉醒的痛苦过程（1分）。两种描写相辅相成，外貌细节让受害者的痛具体可感，心理描写让旁观者的挣扎真实可信，使整篇叙事既有冲击力又有反省深度（1分）。",
+              modelEn: "The author primarily uses two descriptive techniques (1m). First, detail description — \"Xiaoman's face flushed instantly red; her eyes circled the classroom,\" \"her tears falling drop by drop onto the soaked shoe\" — these vivid details let readers directly feel Xiaoman's helplessness and humiliation (1m). Second, psychological description — \"I told myself repeatedly: this isn't my business,\" \"the string in my heart marked 'this isn't my business' snapped with an audible click\" — these inner monologues let readers viscerally feel \"my\" painful journey from self-rationalisation to conscience awakening (1m). The two techniques work together — visual details make the victim's pain tangible, psychological descriptions make the bystander's struggle authentic — giving the narrative both impact and reflective depth (1m).",
+              technique: "评鉴题用「立场 + 论据」格式，并指明描写类型。Evaluate with stand + evidence; specify descriptive type."
+            },
+            {
+              id: "p2q5", type: "伸展 Elaborating", marks: 5,
+              zh: "你认为，「我」在那个下午的沉默，更接近「人性的懦弱」，还是「成长过程中难免的盲点」？请说明你的看法。（5分）",
+              en: "Do you think \"my\" silence that afternoon is closer to \"human cowardice\" or \"an unavoidable blind spot in growing up\"? Explain your view. (5m)",
+              modelZh: "我认为，「我」在那个下午的沉默，更接近「成长过程中难免的盲点」，而不只是「人性的懦弱」。<br><br>这是因为，中三的学生大脑前额叶尚未成熟，面对突发的社交冲突时，本能反应往往是「自保」而非「行动」——这是成长发育的客观限制，不能简单等同懦弱（1分，解释一）。同时，当时的学生还缺乏「介入的低风险路径」知识——他们不知道可以匿名举报、可以邀请受害者共餐、可以三人合力阻止——若没有这些工具，沉默几乎是唯一可见的选择（1分，解释二）。再者，「我」多年后主动加入「同伴守护员」计划，这正说明「我」当年的沉默并非根深蒂固的人性缺陷，而是可以通过教育与意识觉醒而修正的盲点（1分，解释三）。<br><br>我没有选「人性的懦弱」，是因为这种说法把所有成长中的错误都归于道德缺陷，忽略了青少年面对突发情境的生理与认知局限（1分，深化一）；真正能解决问题的，是早期的反霸凌教育与「介入工具箱」训练，而非道德谴责（1分，深化二）。<br><br>所以，我认为「我」的沉默是一个值得社会用教育与同理心去修正的盲点，而非应被永远定罪的「懦弱」。",
+              modelEn: "I believe \"my\" silence that afternoon is closer to \"an unavoidable blind spot in growing up,\" not merely \"human cowardice.\"<br><br>This is because a Sec 3 student's prefrontal cortex is not yet mature; facing sudden social conflict, the instinctive reaction is often \"self-protection\" rather than \"action\" — this is an objective developmental limitation that cannot be simply equated with cowardice (1m, reason 1). At the same time, the students at that time lacked knowledge of \"low-risk intervention paths\" — they did not know they could anonymously report, invite the victim to lunch, or jointly stop the perpetrators with two or three others; without these tools, silence was almost the only visible option (1m, reason 2). Furthermore, \"my\" later proactive joining of the \"Peer Guardians\" programme shows that my silence years before was not a deep-rooted character defect, but a blind spot correctable through education and awakening (1m, reason 3).<br><br>I did not choose \"human cowardice\" because that framing assigns all growth-stage mistakes to moral defect, ignoring adolescents' physiological and cognitive limits in sudden situations (1m, elaboration 1); what truly solves the problem is early anti-bullying education and \"intervention toolkit\" training — not moral condemnation (1m, elaboration 2).<br><br>Therefore, I believe \"my\" silence is a blind spot worth correcting through education and empathy, not a \"cowardice\" to be condemned forever.",
+              technique: "伸展题二选一 5A = 立场（0分）+ 解释（3分）+ 深化（2分）。Elaborating either-or 5A = stand (0m) + explanation (3m) + elaboration (2m)."
+            }
+          ]
+        },
+        // ─────────── PASSAGE 3: 议论文 — Punitive vs Restorative Justice ───────────
+        {
+          title: "短文三：鞭刑能否让加害者真正悔改？ Passage 3: Can Caning Truly Drive Perpetrator Remorse?",
+          marks: 17,
+          textZh: [
+            "\u3000\u30002026年4月，新加坡教育部把校园霸凌的处分与吸食电子烟挂钩，宣布严重违规者可处停学一至三天、鞭刑一鞭。社会立刻掀起两派激烈讨论：「严惩派」与「修复派」。一派坚信「不见血不长记性」，另一派则担忧「鞭打只让人记住痛，不让人明白错」。哪一派更接近真相？答案不是「二选一」，而是「两者必须并存」。",
+            "\u3000\u3000诚然，严惩派的逻辑有其道理。长期以来，本地校园霸凌的处分以「记小过」、「写反省」为主，加害者得到的实际后果远不足以对其行为构成有效震慑。一名一线教师向《海峡时报》坦言：「以前学生霸凌别人，最严重也只是停学一天。新框架终于给了我们一份真正的执法依据。」从这个角度看，严刑的存在确实是不可或缺的「底线」。",
+            "\u3000\u3000然而，单纯依靠刑罚并不能解决霸凌的根源。心理学家陈志强博士的研究指出，本地中学加害学生中，逾六成承受着不同程度的家庭功能失调或心理压力——他们的霸凌行为往往是「向外投射的求救信号」。当我们只用鞭刑回应这种信号时，加害者感受到的不是「我错了」，而是「这个世界不爱我」——这种心态只会让他们在毕业后转向更隐蔽的网络霸凌或人身暴力。",
+            "\u3000\u3000「修复式正义」（restorative justice）则提供了一个不同的回应方式。它要求加害者面对面听受害者描述每一次嘲讽对其造成的痛苦、共同制定补救计划、并在六个月内接受追踪。2025年圣公会中学试行该计划后，加害学生的两年再犯率仅为7%，远低于全国平均的23%；受害者反馈「真正感觉到对方的歉意」的比例高达八成五。这些数据告诉我们：修复，比鞭打更能改变一个人。",
+            "\u3000\u3000所以，2026年的新框架并非「严惩与修复」之间的二选一，而是两者必须并存的提醒。严刑是底线，修复是出路。前者震慑潜在加害者，后者疗愈受过创伤的灵魂——只有两者并行，校园霸凌才有真正被根治的可能。",
+          ],
+          textEn: [
+            "In April 2026, Singapore's Ministry of Education aligned bullying penalties with vaping offences, announcing that serious offenders may face 1-3 days suspension and 1 stroke of the cane. Society immediately split into two camps: \"pro-deterrence\" and \"pro-restoration.\" One side believes \"no blood, no memory\"; the other worries that \"caning only makes one remember the pain, not understand the wrong.\" Which side is closer to truth? The answer is not \"either-or,\" but \"both must coexist.\"",
+            "Admittedly, the pro-deterrence logic has its merit. For too long, local school bullying has been handled with \"minor demerits\" and \"reflection essays\" — the actual consequences for perpetrators have been nowhere near sufficient to deter their behaviour. A frontline teacher told The Straits Times: \"In the past, the worst a bully faced was a one-day suspension. The new framework finally gives us a real enforcement basis.\" From this angle, strict punishment is indeed an indispensable \"bottom line.\"",
+            "However, relying solely on punishment cannot resolve bullying's root causes. Psychologist Dr Tan Chee Keong's research shows over 60% of student perpetrators in local secondary schools endure varying degrees of family dysfunction or psychological stress — their bullying behaviour is often an \"externalised distress signal.\" When we respond to that signal only with caning, what perpetrators feel is not \"I was wrong,\" but \"the world doesn't love me\" — and this mindset will only push them toward more hidden cyberbullying or physical violence after graduation.",
+            "\"Restorative justice\" offers a different response. It requires perpetrators to face the victim directly, listen to each instance of how the mockery caused pain, co-develop a remediation plan, and undergo six months of monitoring. After St Andrew's Secondary School trialled the programme in 2025, perpetrators in the programme had a two-year reoffending rate of just 7%, far below the national average of 23%; meanwhile, 85% of victims reported \"genuinely feeling the perpetrator's remorse.\" The data tells us this: restoration changes a person more than caning ever could.",
+            "Therefore, the 2026 framework is not a choice between \"strict punishment\" or \"restoration\" — it is a reminder that the two must coexist. Strict punishment is the bottom line; restoration is the way out. The former deters potential perpetrators; the latter heals wounded souls — only when both run in parallel can school bullying truly be resolved at its root.",
+          ],
+          questions: [
+            {
+              id: "p3q1", type: "复述 Retrieving", marks: 2,
+              zh: "根据第1段，社会对2026年4月新框架的反应分成哪两派？请简要说明。（2分）",
+              en: "According to Paragraph 1, into which two camps did society split in response to the April 2026 framework? Briefly explain. (2m)",
+              modelZh: "社会分成「严惩派」与「修复派」两派（1分）：严惩派坚信「不见血不长记性」，修复派则担忧鞭打只让人记住痛，不让人明白错（1分）。",
+              modelEn: "Society split into the \"pro-deterrence\" and \"pro-restoration\" camps (1m): the deterrence camp believes \"no blood, no memory,\" while the restoration camp worries that caning only makes one remember the pain, not understand the wrong (1m).",
+              technique: "复述题找关键字→原文定位→改写抄答。Retrieve keywords, locate in passage, rephrase answer."
+            },
+            {
+              id: "p3q2", type: "重整 Reorganising", marks: 4,
+              zh: "根据第3、4段，作者从哪些层面论证「严刑无法独自根治霸凌」？请按要点说明（4分）。",
+              en: "According to Paragraphs 3 and 4, from what perspectives does the author argue \"strict punishment alone cannot heal bullying at its root\"? Outline by points (4m).",
+              modelZh: "首先，从加害者根源层面：逾六成加害学生承受着家庭功能失调或心理压力，霸凌行为是「向外投射的求救信号」，单纯鞭刑无法回应这种信号（1分）。其次，从加害者反应层面：当只用刑罚回应时，加害者感受到的不是「我错了」而是「这个世界不爱我」，反而强化排斥心态（1分）。再者，从行为延续层面：未获修复的加害者很可能在毕业后转向更隐蔽的网络霸凌或人身暴力（1分）。最后，从数据层面：圣公会中学试行修复式正义后，两年再犯率仅7%，远低于全国平均23%，证明修复比鞭打更能改变一个人（1分）。",
+              modelEn: "First, from the perpetrator's root level: over 60% of student perpetrators endure family dysfunction or psychological stress; bullying is an \"externalised distress signal\" that pure caning cannot answer (1m). Second, from the perpetrator's response level: when met with punishment alone, perpetrators feel not \"I was wrong\" but \"the world doesn't love me,\" reinforcing rejection (1m). Third, from the behavioural continuation level: unrestored perpetrators may pivot to more hidden cyberbullying or physical violence after graduation (1m). Finally, from the data level: after St Andrew's trialled restorative justice, the two-year reoffending rate was 7%, far below the national average of 23%, proving restoration changes a person more than caning (1m).",
+              technique: "重整题按论证层次组织。Reorganise by argumentation layers."
+            },
+            {
+              id: "p3q3", type: "解释 Explaining", marks: 2,
+              zh: "请解释「严刑是底线，修复是出路」（第5段）在文中的意思。（2分）",
+              en: "Explain the meaning of \"strict punishment is the bottom line; restoration is the way out\" (Paragraph 5) in context. (2m)",
+              modelZh: "这句话指的是，严刑作为「底线」承担震慑作用，让加害者意识到霸凌的后果（1分）；而修复式正义作为「出路」则提供加害者悔改、受害者康复的真正机会——前者守住底线，后者打开未来（1分）。",
+              modelEn: "This means that strict punishment as the \"bottom line\" serves a deterrent function, making perpetrators aware of bullying's consequences (1m); while restorative justice as the \"way out\" provides genuine opportunities for perpetrator remorse and victim recovery — the former holds the line, the latter opens the future (1m).",
+              technique: "解释题写出对偶句的字面与象征意义。Explain both literal and symbolic meanings of the parallel structure."
+            },
+            {
+              id: "p3q4", type: "评鉴 Evaluating", marks: 4,
+              zh: "作者主要运用了哪几种论证方法来支持「严惩与修复并存」的观点？请举出至少两种并说明其作用（4分）。",
+              en: "Which argumentation methods does the author primarily use to support the \"deterrence and restoration must coexist\" view? Identify at least two and explain each method's purpose (4m).",
+              modelZh: "作者主要运用了两种论证方法（1分）。第一，作者使用了引证论证法——具体引用一线教师对《海峡时报》的表态与心理学家陈志强博士的研究，让两派论点都有专业背书，增强论证的可信度（1分）。第二，作者使用了对比论证法——把「圣公会中学修复式正义」的7%再犯率与全国平均的23%作直接对比，让读者直观看到修复式正义的实际成效（1分）。两种方法相辅相成，引证让两派观点皆获权威支持，对比让数字说话——使「并存」结论既兼听则明，又有数据支撑，颇具说服力（1分）。",
+              modelEn: "The author primarily uses two argumentation methods (1m). First, citation argumentation — citing both a frontline teacher's remarks in The Straits Times and Dr Tan Chee Keong's research, giving both camps authoritative backing and strengthening the argument's credibility (1m). Second, contrast argumentation — directly contrasting St Andrew's 7% reoffending rate with the national average of 23%, letting readers directly see the practical impact of restorative justice (1m). Together, citation grants both camps expert support while contrast lets numbers speak — making the \"coexistence\" conclusion both balanced and data-backed, and therefore highly persuasive (1m).",
+              technique: "评鉴题用「立场 + 论据」格式，并指明论证类型。Evaluate with stand + evidence; specify argumentation type."
+            },
+            {
+              id: "p3q5", type: "伸展 Elaborating", marks: 5,
+              zh: "作者在结尾说：「严刑是底线，修复是出路。前者震慑潜在加害者，后者疗愈受过创伤的灵魂——只有两者并行，校园霸凌才有真正被根治的可能。」你同意这种「严惩＋修复」双管齐下的观点吗？请结合你的观察或经历加以说明。（5分）",
+              en: "The author concludes: \"Strict punishment is the bottom line; restoration is the way out. The former deters potential perpetrators, the latter heals wounded souls — only when both run in parallel can school bullying truly be resolved at its root.\" Do you agree with this \"deterrence + restoration\" twin-track view? Elaborate with examples from your own observations or life. (5m)",
+              modelZh: "我同意作者的看法。<br><br>这是因为，单纯依靠惩罚虽能产生短期威慑，却无法触及霸凌行为背后的心理根源——加害者若没有机会真正面对受害者的痛苦，其悔改往往只是表面的（1分，解释一）。同时，纯粹靠修复又可能让某些冲动型加害者得不到足够震慑——「严刑＋修复」的组合，正好让底线与出路同时存在，缺一不可（1分，解释二）。<br><br>以我自己的观察为例。<u>之前</u>，我校曾有一位同学因长期嘲讽一位戴助听器的同学，被记小过两次，但他半年内又再犯三次——可见单纯的处分对他完全没有产生悔改效果（1分，之前）。<u>后来</u>，学校在2025年试行修复式对话，那位同学被要求与受害者面对面坐下，亲耳听对方描述「每次走进教室都觉得全班在等着嘲笑我」时的感受。那是我第一次看见他低下头流泪（1分，过程）。<u>最后</u>，那位同学在六个月后写了一封手写道歉信给受害者，并主动加入「同伴守护员」计划。事后他告诉我：「记小过让我恨学校；那次对话让我恨自己。」这句话让我深刻明白，「严惩＋修复」缺一不可（1分，之后）。<br><br>所以，我同意作者「两者必须并存」的观点。",
+              modelEn: "I agree with the author.<br><br>This is because punishment alone, while delivering short-term deterrence, cannot touch the psychological roots behind bullying behaviour — if perpetrators have no chance to truly face the victim's suffering, their remorse is often superficial (1m, reason 1). At the same time, pure restoration may leave some impulsive perpetrators without sufficient deterrence — the \"discipline + restoration\" combination ensures both bottom line and way out coexist, with neither dispensable (1m, reason 2).<br><br>Taking my own observation as an example. <u>Before</u>: at my school, a classmate who had long mocked a student wearing a hearing aid was given minor demerits twice, but reoffended three more times within half a year — clearly, pure punishment had no remorse-driving effect (1m, before). <u>During</u>: in 2025, the school trialled restorative dialogue, requiring that classmate to sit face-to-face with the victim and personally hear him describe \"every time I walk into the classroom I feel the whole class is waiting to mock me.\" That was the first time I saw the perpetrator lower his head and cry (1m, during). <u>After</u>: six months later, the perpetrator wrote a handwritten apology letter to the victim and proactively joined the \"Peer Guardians\" programme. He later told me: \"The demerits made me hate the school; that dialogue made me hate myself.\" That sentence taught me deeply that \"discipline + restoration\" is indivisible (1m, after).<br><br>Therefore, I agree with the author's \"both must coexist\" view.",
+              technique: "伸展题 5B = 立场（0分）+ 解释（2分）+ 个人例子之前/过程/之后（3分）。Elaborating 5B = stand (0m) + reasoning (2m) + personal example before/during/after (3m)."
+            }
+          ]
+        }
+      ]
+    },
+    suggest: {
+      stakeholders: [
+        {
+          who: "个人 Personal",
+          whoen: "Me as a student",
+          count: 4,
+          suggestions: [
+            { zh: "敢于挺身：目睹霸凌时主动靠近受害者，自然地聊功课或邀请共餐，让加害者意识到「不是全班都默许」。", en: "Dare to stand up: when witnessing bullying, proactively approach the victim, chat about homework or invite them to lunch — letting perpetrators know \"not everyone in the class silently accepts this.\"" },
+            { zh: "善用举报：把学校的匿名举报系统当作守护工具，每一次目击都坚持记录提交，让加害行为留下证据。", en: "Use reporting wisely: treat the school's anonymous reporting system as a guardian tool — record and submit every incident witnessed, ensuring perpetrators' behaviour leaves a record." },
+            { zh: "管理数码足迹：在网络上不转发任何可能羞辱他人的贴文，把自己的「点赞」与「转发」当成立场表态。", en: "Manage your digital footprint: do not re-share any post that may humiliate others; treat your \"likes\" and \"shares\" as statements of stance." },
+            { zh: "建立同盟：在班上结成两至三人的「不沉默小组」，约定一起介入、一起举报、一起照应受害者。", en: "Build alliances: form a \"no-silence team\" of two or three classmates, committing to intervene together, report together and accompany victims together." }
+          ]
+        },
+        {
+          who: "家庭 Parents",
+          whoen: "Parents at home",
+          count: 4,
+          suggestions: [
+            { zh: "倾听不打断：当孩子提起被嘲讽或被孤立的事时，先听完整段经过再回应，别急着说「你别理就好」。", en: "Listen without interrupting: when a child raises being mocked or isolated, listen to the entire account before responding — don't rush to say \"just ignore it.\"" },
+            { zh: "正确分辨：学习区分一次性「伤害性行为」与反复性「霸凌」，并在判断为霸凌时主动通报学校或警方。", en: "Distinguish correctly: learn the difference between one-off \"hurtful behaviour\" and repeated \"bullying,\" and proactively alert the school or police when it qualifies as bullying." },
+            { zh: "关注数码生活：与孩子定期讨论他们在 Telegram、TikTok 与 Instagram 上的经历，让他们知道父母是「数码生活的盟友」。", en: "Watch digital life: regularly discuss with children their experiences on Telegram, TikTok and Instagram, letting them know parents are \"allies in their digital life.\"" },
+            { zh: "以身作则：父母自身在网络发言、与他人交流时展现尊重与同理心，孩子才会自然内化这些价值观。", en: "Lead by example: parents themselves should model respect and empathy in online speech and interactions — only then will children naturally internalise these values." }
+          ]
+        },
+        {
+          who: "学校 Schools",
+          whoen: "Schools & educators",
+          count: 5,
+          suggestions: [
+            { zh: "简化举报系统：把举报流程压缩至三十秒内可完成，并保证四十八小时内由辅导员书面回应。", en: "Simplify reporting systems: compress the reporting process to under 30 seconds, with guaranteed written counsellor response within 48 hours." },
+            { zh: "推行修复式正义：每起霸凌案件除处分外，加害者必须参加至少三次结构化的修复式对话。", en: "Implement restorative justice: alongside disciplinary penalty, every bullying offender must attend at least three structured restorative dialogues." },
+            { zh: "「真心话星期五」午餐对话：辅导员每周举办匿名报名的午餐对话，让受过孤立的同学有低门槛的疗愈空间。", en: "\"Real Talk Fridays\" lunch dialogues: counsellors hold anonymous-sign-up lunch dialogues weekly, giving isolated students a low-barrier healing space." },
+            { zh: "培训「同伴守护员」：在每个年级选拔并培训二十名学生，提供他们「介入工具箱」，让旁观者有具体可执行的方式。", en: "Train \"Peer Guardians\": select and train 20 students per level, equipping them with an \"intervention toolkit\" — giving bystanders concrete, executable methods." },
+            { zh: "数码同理心课程：在中三、中四开设六节情境模拟课程，让学生亲身体会一句嘲讽贴文对受害者的真实伤害。", en: "Digital empathy curriculum: introduce six role-play lessons at Sec 3 and 4 levels, letting students personally experience the real harm of a mocking post on a victim." }
+          ]
+        },
+        {
+          who: "政府 Government",
+          whoen: "Government & community bodies",
+          count: 5,
+          suggestions: [
+            { zh: "严刑＋修复双轨：把2026年4月的新处分框架与全国性「修复式正义辅导小组」同步推行，让底线与出路并存。", en: "Twin-track discipline + restoration: roll out the April 2026 disciplinary framework alongside a nationwide \"Restorative Justice Counselling Team,\" ensuring bottom line and way out coexist." },
+            { zh: "立法监管平台：要求所有在本地拥有逾一万名用户的社媒平台必须在四十八小时内回应警方下架令。", en: "Legislate platform oversight: require any social-media platform with over 10,000 local users to respond to police takedown orders within 48 hours." },
+            { zh: "Singpass 匿名验证：要求所有在新加坡注册或运营匿名内容频道的用户须通过 Singpass 验证年龄。", en: "Singpass anonymity verification: require all users registering or operating anonymous content channels in Singapore to verify age via Singpass." },
+            { zh: "增设辅导员人手：新加坡每所中学辅导员人手数翻倍，让心理辅导从「奢侈品」变成「日常可及的资源」。", en: "Double counsellor capacity: double the number of counsellors per secondary school in Singapore, transforming psychological counselling from a \"luxury\" to an \"everyday resource.\"" },
+            { zh: "全国「反霸凌周」：每年5月举办全国反霸凌周，邀请受害者、加害者（已悔改）、家长、教师共同对话，让议题持续被看见。", en: "National \"Anti-Bullying Week\": hold a national Anti-Bullying Week every May — inviting victims, reformed perpetrators, parents and teachers into joint dialogue, keeping the issue continually visible." }
+          ]
+        }
+      ],
+      models: {
+        personal: [
+          {
+            question: { zh: "你认为我们（学生）可以如何遏制校园霸凌的发生？", en: "How do you think we (students) can help curb school bullying?" },
+            rows: [
+              { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                zh: "第一，我认为我们可以在班上建立一个三人的「不沉默小组」，约定一起介入、一起举报、一起照应受害者。",
+                en: "First, I believe we can form a three-person \"no-silence team\" in our class — committing to intervene together, report together and accompany victims together.",
+                starter: "第一，我认为我们可以在……建立……的「……」，约定……、……、……。",
+                starterEn: "First, I believe we can form … in …, committing to …, … and …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，我们三人约定每周一同检查班上是否有同学被孤立、被嘲讽，并立即采用「邀请共餐」、「自然聊天」等低风险方式陪伴受害者。然后，若情况持续，我们三人于同一周分别用匿名系统提交目击描述，确保举报有足够证据。最后，我们每两周与辅导员见面一次，回报班级氛围的变化。",
+                en: "To start, the three of us agree to check weekly whether any classmate is being isolated or mocked, immediately adopting low-risk approaches like \"inviting them to lunch\" or \"casual conversation\" to accompany the victim. Then, if the situation persists, the three of us each submit witness descriptions via the anonymous system within the same week, ensuring sufficient evidence. Finally, we meet the counsellor every two weeks to report on changes in classroom atmosphere.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让受害者感受到「至少有三个人是站在我这边的」，也让加害者意识到「全班并不默许」，从而在源头削弱霸凌发生的土壤。",
+                en: "If this is done, the victim feels \"at least three people are on my side,\" while perpetrators realise \"the whole class does not silently accept this\" — weakening the soil bullying grows in at its source.",
+                starter: "如果这样做，就会让……感受到「……」，也让……意识到「……」，从而……",
+                starterEn: "If this is done, … feels \"…\", while … realises \"…\", thereby …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我认为这种「不沉默小组」的做法，是我作为学生最具体也最可行的反霸凌行动。",
+                en: "Therefore, I believe this \"no-silence team\" approach is the most concrete and feasible anti-bullying action I can take as a student.",
+                starter: "所以，我认为……是我作为……最具体也最可行的……行动。",
+                starterEn: "Therefore, I believe … is the most concrete and feasible … action I can take as …" }
+            ]
+          }
+        ],
+        parents: [
+          {
+            question: { zh: "父母可以如何成为孩子面对霸凌时最有力的支援？", en: "How can parents become a child's strongest support when facing bullying?" },
+            rows: [
+              { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                zh: "第一，我认为父母可以从「倾听不打断」开始，让孩子知道家是他们求助路上最安全的第一站。",
+                en: "First, I believe parents can begin with \"listening without interrupting\" — letting children know home is the safest first stop on their help-seeking path.",
+                starter: "第一，我认为父母可以从「……」开始，让孩子知道……。",
+                starterEn: "First, I believe parents can begin with \"…\", letting children know …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，当孩子提起被嘲讽的事情时，父母可以放下手机、把电视关掉，专心听完整段经过，避免任何「你别理就好」的回应。然后，父母可以与孩子一起判断这次事件属于「伤害性行为」还是「霸凌」，并陪同孩子草拟向学校通报的内容。最后，父母可以每周与孩子讨论一次社媒经历，让数码生活成为家庭日常话题。",
+                en: "To start, when a child raises being mocked, parents put down their phone, turn off the TV, and listen attentively to the entire account — avoiding any \"just ignore it\" response. Then, parents and child together assess whether the incident is \"hurtful behaviour\" or \"bullying,\" and the parent helps draft what to report to the school. Finally, parents discuss social-media experiences with the child weekly, making digital life a routine family topic.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让孩子真正把父母当作「数码生活的盟友」，从而在受害的关键时刻不再独自承受，也大大提升问题被及时介入的几率。",
+                en: "If this is done, the child genuinely sees parents as \"allies in digital life\" — no longer bearing victimhood alone at critical moments, greatly increasing the chance of timely intervention.",
+                starter: "如果这样做，就会让……真正把……当作「……」，从而……，也大大提升……。",
+                starterEn: "If this is done, … genuinely sees … as \"…\", thereby …, and greatly increasing …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我认为父母的「倾听文化」是孩子面对霸凌时最坚实的家庭防线。",
+                en: "Therefore, I believe parents' \"culture of listening\" is the most solid family defence when a child faces bullying.",
+                starter: "所以，我认为父母的「……」是……面对……时最坚实的……。",
+                starterEn: "Therefore, I believe parents' \"…\" is the most solid … when … faces …" }
+            ]
+          }
+        ],
+        school: [
+          {
+            question: { zh: "学校可以如何系统性地遏制校园霸凌？", en: "How can schools systematically curb school bullying?" },
+            rows: [
+              { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                zh: "第一，我建议学校把「严刑、修复式正义、预防教育」三管齐下作为校园反霸凌的核心策略。",
+                en: "First, I propose schools adopt \"discipline, restorative justice and prevention education\" as a three-pronged core anti-bullying strategy.",
+                starter: "第一，我建议……把「……、……、……」三管齐下作为……的核心策略。",
+                starterEn: "First, I propose … adopt \"…, … and …\" as the three-pronged core strategy for …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，学校须严格执行教育部2026年4月的处分框架，包括必要时的鞭刑，让加害者意识到霸凌的明确后果。然后，每起霸凌案件除处分外，加害者必须参加至少三次结构化修复式对话，亲耳听受害者描述每一次嘲讽对其的影响。最后，学校在中三、中四开设六节「数码同理心」情境模拟课程，让所有学生在加害发生前就建立同理心。",
+                en: "To start, schools must strictly enforce MOE's April 2026 framework, including caning where appropriate, ensuring perpetrators understand the clear consequences of bullying. Then, alongside disciplinary penalty, every bullying offender must attend at least three structured restorative dialogues — personally hearing the victim describe how each instance of mockery affected them. Finally, schools introduce six \"Digital Empathy\" role-play lessons at Sec 3 and 4 levels, building empathy in all students before perpetration ever occurs.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让学校形成「底线、出路与预防」并存的健康生态，从根本上降低再犯率、修复创伤、并培养下一代学生的同理心。",
+                en: "If this is done, schools form a healthy ecosystem where \"bottom line, way out and prevention\" coexist — fundamentally lowering reoffending rates, healing trauma and cultivating the next generation's empathy.",
+                starter: "如果这样做，就会让……形成「……」并存的健康生态，从根本上……、……、……。",
+                starterEn: "If this is done, … forms a healthy ecosystem where \"…\" coexist — fundamentally …, … and …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我建议每一所中学把这套「三管齐下」纳入正式学生事务政策。",
+                en: "Therefore, I propose every secondary school formally incorporate this three-pronged approach into its student affairs policy.",
+                starter: "所以，我建议……把……纳入正式……。",
+                starterEn: "Therefore, I propose … formally incorporate … into …" }
+            ]
+          }
+        ],
+        government: [
+          {
+            question: { zh: "政府可以如何从立法与制度层面遏制校园与网络霸凌？", en: "How can the government curb school and cyberbullying through legislation and institutional design?" },
+            rows: [
+              { label: "建议·1 Suggest·1", pTop: "P", pBot: "建议 Suggest",
+                zh: "第一，我建议政府立法要求所有在本地拥有逾一万名用户的社媒平台，必须在四十八小时内回应警方的下架令。",
+                en: "First, I propose the government legislate that any social-media platform with over 10,000 local users must respond to police takedown orders within 48 hours.",
+                starter: "第一，我建议政府……要求所有……，必须在……内回应……。",
+                starterEn: "First, I propose the government legislate that any … must respond to … within …" },
+              { label: "步骤", pTop: "E", pBot: "步骤 How",
+                zh: "首先，资讯通信媒体发展局可联合警方建立「本地紧急下架管道」，所有涉及本地未成年人的霸凌内容，警方可在四十八小时内发出强制下架令。然后，凡未依时下架的平台，将面临按平台年度营收百分比计算的高额罚款。最后，政府要求所有此类平台在新加坡境内接入 Singpass 年龄验证，确保未成年人的内容自动受到额外保护。",
+                en: "To start, IMDA can partner with the police to establish a \"local emergency takedown channel\" — for any bullying content involving local minors, police may issue a mandatory takedown order within 48 hours. Then, platforms that fail to comply will face heavy fines calibrated to a percentage of their annual revenue. Finally, the government requires all such platforms to integrate Singpass age verification within Singapore, ensuring minors' content is automatically given extra protection.",
+                starter: "首先……。然后……。最后……。",
+                starterEn: "To start … Then … Finally …" },
+              { label: "效果", pTop: "E", pBot: "效果 Outcome",
+                zh: "如果这样做，就会让平台无法再以「不违反规则」为由放任霸凌内容存在，从根源上压缩匿名网络霸凌的生存空间。",
+                en: "If this is done, platforms can no longer let bullying content persist under \"does not violate rules\" — compressing the survival space of anonymous cyberbullying at its root.",
+                starter: "如果这样做，就会让……无法再以「……」为由……，从根源上……。",
+                starterEn: "If this is done, … can no longer … under \"…\" — fundamentally …" },
+              { label: "总结", pTop: "L", pBot: "总结 Link",
+                zh: "所以，我恳请政府尽快推动这项立法，让本地未成年人的数码空间真正得到法律的保护。",
+                en: "Therefore, I sincerely request the government drive this legislation as soon as possible, ensuring local minors' digital space receives genuine legal protection.",
+                starter: "所以，我恳请政府尽快推动……，让……真正得到……。",
+                starterEn: "Therefore, I sincerely request the government drive … as soon as possible, ensuring … receives …" }
+            ]
+          }
+        ]
+      }
+    },
+    oral: {
+      keywordTable: [
+        ["你有没有… / 你曾经…", "Have you ever… / Have you had…", "ex", "经验 Experience"],
+        ["你喜不喜欢… / 你会不会…", "Do you like… / Would you…", "op", "意见 Opinion"],
+        ["你同意吗？请谈谈看法。", "Do you agree? Share your views.", "op", "意见 Opinion"],
+        ["如果你是录像中的…，你会怎么做？", "If you were the person in the video, what would you do?", "sg", "建议 Suggestion"],
+        ["如果你是录像中的…，你会有什么感受？", "If you were in the video, how would you feel?", "op", "意见 Opinion"],
+        ["你认为（…）可以如何……？", "How do you think (…) can…?", "sg", "建议 Suggestion"]
+      ],
+      questions: [
+        {
+          id: "o1", n: "Q1", type: "op", mode: "model",
+          badge: "意见题 Opinion",
+          zh: "你认为新加坡教育部2026年4月推出的更严校园霸凌处分框架，是不是遏制霸凌的好办法？请说说你的看法。",
+          en: "Do you think MOE's stricter April 2026 framework for school bullying is a good approach to curbing bullying? Share your views.",
+          hint: "意见PEEL Opinion PEEL|P · 立场 Stand|E · 这是因为 Because|E · 证据 Evidence|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "立场", pTop: "P", pBot: "立场 Stand",
+              zh: "我不完全同意新框架就是遏制霸凌的好办法。我认为，严刑确实是不可或缺的「底线」，但若没有修复与预防同行，再严的处分也难以根治霸凌。",
+              en: "I partially disagree that the new framework alone is a good approach to curbing bullying. I believe strict punishment is indeed an indispensable \"bottom line,\" but without restoration and prevention walking alongside, even the strictest discipline cannot heal bullying at its root.",
+              starter: "我不完全同意……。我认为，……确实是不可或缺的「……」，但若没有……同行，……也难以……。",
+              starterEn: "I partially disagree that … I believe … is indeed an indispensable \"…\", but without … walking alongside, … cannot …" },
+            { label: "理由", pTop: "E", pBot: "理由 Reason",
+              zh: "这是因为，霸凌的根源往往不在加害者本人，而在他们承受的心理创伤或家庭压力——若只有鞭打而无修复对话，加害者只会记住「这个世界不爱我」，而不是「我错了」。",
+              en: "This is because bullying's roots often lie not in perpetrators themselves but in the psychological trauma or family stress they endure — with only caning and no restorative dialogue, perpetrators remember only \"the world doesn't love me,\" not \"I was wrong.\"",
+              starter: "这是因为，……的根源往往不在……，而在……——若只有……而无……，……只会记住「……」，而不是「……」。",
+              starterEn: "This is because … roots lie not in … but in … — with only … and no …, … remembers only \"…\", not \"…\"." },
+            { label: "证据", pTop: "E", pBot: "证据 Evidence",
+              zh: "就拿2025年圣公会中学试行修复式正义的例子来说，参与该计划的加害学生两年再犯率仅为7%，远低于全国平均的23%；同时八成五的受害者表示「真正感觉到对方的歉意」。",
+              en: "Take the 2025 St Andrew's Secondary School example: perpetrators in the restorative justice programme had a two-year reoffending rate of just 7%, far below the national average of 23%; meanwhile 85% of victims reported \"genuinely feeling the perpetrator's remorse.\"",
+              starter: "就拿……的例子来说，……仅为……，远低于……；同时……表示「……」。",
+              starterEn: "Take … as an example: … was just …, far below …; meanwhile … reported \"…\"." },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，我认为新框架的方向是对的，但必须搭配修复式正义与预防教育，才能成为真正有效的反霸凌策略。",
+              en: "Therefore, I believe the new framework's direction is correct, but it must be paired with restorative justice and prevention education to become a truly effective anti-bullying strategy.",
+              starter: "所以，我认为……的方向是对的，但必须搭配……，才能成为……。",
+              starterEn: "Therefore, I believe … direction is correct, but it must be paired with … to become …" }
+          ]
+        },
+        {
+          id: "o2", n: "Q2", type: "sg", mode: "model",
+          badge: "建议题 Suggestion",
+          zh: "你认为学校可以如何让旁观者敢于挺身而出，介入校园霸凌？",
+          en: "How do you think schools can embolden bystanders to stand up and intervene in school bullying?",
+          hint: "建议PEEL Suggestion PEEL|P · 建议 Suggestion|E · 首先／然后／最后 First/Then/Finally|E · 如果这样做 If this is done|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "建议", pTop: "P", pBot: "建议 Suggest",
+              zh: "第一，我认为学校可以推行「同伴守护员」培训计划，给旁观者具体可执行的介入工具。",
+              en: "First, I believe schools can roll out a \"Peer Guardians\" training programme, giving bystanders concrete and executable intervention tools.",
+              starter: "第一，我认为学校可以……，给……具体可执行的……。",
+              starterEn: "First, I believe schools can …, giving … concrete and executable …" },
+            { label: "步骤", pTop: "E", pBot: "步骤 How",
+              zh: "首先，每个年级可选拔二十名学生接受「介入工具箱」培训，内容包括三步低风险介入法、匿名举报技巧与受害者陪伴方式。然后，「同伴守护员」每周与辅导员开一次短会，分享班上观察。最后，他们也定期向同学示范如何在不激怒加害者的前提下，给受害者一个温暖的信号。",
+              en: "To start, each level selects 20 students for \"intervention toolkit\" training — covering three-step low-risk intervention, anonymous reporting techniques, and how to accompany victims. Then, the \"Peer Guardians\" meet the counsellor briefly each week to share classroom observations. Finally, they regularly demonstrate to classmates how to send the victim a warm signal without provoking the perpetrator.",
+              starter: "首先……。然后……。最后……。",
+              starterEn: "To start … Then … Finally …" },
+            { label: "效果", pTop: "E", pBot: "效果 Outcome",
+              zh: "如果这样做，就会让原本因恐惧而沉默的旁观者拥有具体的介入路径，从而把全班氛围从「沉默默许」转向「集体守护」。",
+              en: "If this is done, bystanders who once stayed silent out of fear gain concrete intervention paths — shifting the class atmosphere from \"silent tacit approval\" to \"collective guardianship.\"",
+              starter: "如果这样做，就会让……拥有具体的……，从而把……从「……」转向「……」。",
+              starterEn: "If this is done, … gain concrete …, shifting … from \"…\" to \"…\"." },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，我认为学校可以认真考虑推行这项「同伴守护员」计划。",
+              en: "Therefore, I believe schools can give serious consideration to implementing this \"Peer Guardians\" programme.",
+              starter: "所以，我认为学校可以认真考虑推行……。",
+              starterEn: "Therefore, I believe schools can give serious consideration to implementing …" }
+          ]
+        },
+        {
+          id: "o3", n: "Q3", type: "ex", mode: "model",
+          badge: "经验题 Experience",
+          zh: "你有没有过被同侪压力影响而做出违心决定的经历？请分享。",
+          en: "Have you ever made a decision against your will due to peer pressure? Please share.",
+          hint: "经验PEEL Experience PEEL|P · 有／没有 Yes/No|E · 一开始／然后／结果 At first/Then/As a result|E · 感受第一／第二 Feeling 1/Feeling 2|L · 总结 Conclusion|口述约 90 秒 ~90 sec",
+          rows: [
+            { label: "回应", pTop: "P", pBot: "回应 Yes/No",
+              zh: "有的。我曾经在中二时，因为同班几位「最受欢迎」的女生的压力，加入了她们嘲笑一位戴助听器的同学的群组聊天。",
+              en: "Yes. In Sec 2, under pressure from a few \"most popular\" girls in my class, I once joined a group chat where they mocked a classmate who wore a hearing aid.",
+              starter: "有的。我曾经在……时，因为……，……。",
+              starterEn: "Yes. I once …, due to …, …" },
+            { label: "经历", pTop: "E", pBot: "经历 Experience",
+              zh: "一开始，我只是默默看着群组里的恶搞贴文，告诉自己「我没参与就行」。然后，她们开始@我让我点赞每一则贴文，否则就把我踢出群——我犹豫了几次后还是按了「赞」。结果，那位戴助听器的同学有一天在课室里看见自己的脸被恶搞成表情包贴图，眼泪当场掉下来。",
+              en: "At first, I just watched the mocking posts in the group, telling myself \"as long as I don't participate, it's okay.\" Then, they began @-ing me to like every post, threatening to kick me out — after hesitating a few times, I pressed \"like.\" As a result, the classmate with the hearing aid one day saw his own face turned into meme stickers in the classroom, and his tears fell instantly.",
+              starter: "一开始，我只是……，告诉自己「……」。然后，……，否则……——我……。结果……。",
+              starterEn: "At first, I just …, telling myself \"…\". Then, …, otherwise … — I …. As a result, …" },
+            { label: "感受", pTop: "E", pBot: "感受 Feeling",
+              zh: "对于这次经历，我的感受是，第一，我深刻体会到「同侪压力」可以让一个有良知的人做出违心的事——它不一定带着恶意，却同样能造成真实伤害。第二，我也意识到，单纯的「我没主动参与」并不等于无辜——按一个「赞」也是在为加害者站台。",
+              en: "My feelings about this experience are: first, I deeply realised that \"peer pressure\" can make even a person with conscience act against their will — it may not carry malice, yet still causes real harm. Second, I also realised that \"I didn't actively participate\" is not innocence — pressing a single \"like\" is also taking the perpetrator's side.",
+              starter: "对于这次经历，我的感受是，第一，我……「……」可以让……。第二，我也意识到……。",
+              starterEn: "My feelings about this experience are: first, I deeply realised that \"…\" can make …. Second, I also realised that …" },
+            { label: "总结", pTop: "L", pBot: "总结 Link",
+              zh: "所以，这次经历让我明白，面对同侪压力时，「不主动伤害」远远不够——我们必须主动选择不站在加害者那一边。",
+              en: "Therefore, this experience taught me that when facing peer pressure, \"not actively harming\" is nowhere near enough — we must actively choose not to stand on the perpetrator's side.",
+              starter: "所以，这次经历让我明白……，「……」远远不够——我们必须……。",
+              starterEn: "Therefore, this experience taught me that when …, \"…\" is nowhere near enough — we must …" }
+          ]
+        },
+        {
+          id: "o4", n: "Q4", type: "op", mode: "scaffold",
+          badge: "意见题 Opinion",
+          zh: "你认为鞭刑是遏制校园霸凌的有效办法吗？请说说你的看法。",
+          en: "Do you think caning is an effective way to curb school bullying? Share your views.",
+          hint: "意见PEEL Opinion PEEL|P · 立场 Stand|E · 这是因为 Because|E · 证据 Evidence|L · 总结 Conclusion|口述约 60 秒 ~60 sec",
+          scaffoldHint: { zh: "建议立场：不完全同意。鞭刑可以对冲动型加害者起到震慑作用，是不可或缺的「底线」；但它无法触及霸凌的心理根源，更无法阻止匿名网络霸凌。可以引用圣公会中学修复式正义计划7%再犯率 vs 全国平均23%的对比。", en: "Suggested stand: partial disagreement. Caning deters impulsive perpetrators and serves as an indispensable \"bottom line\"; but it cannot touch bullying's psychological roots, much less stop anonymous cyberbullying. Can cite the St Andrew's restorative justice 7% reoffending rate vs national 23% comparison." }
+        },
+        {
+          id: "o5", n: "Q5", type: "sg", mode: "scaffold",
+          badge: "建议题 Suggestion",
+          zh: "你认为我们（学生）可以如何减少同侪压力对自己的负面影响？",
+          en: "How do you think we (students) can reduce the negative impact of peer pressure on ourselves?",
+          hint: "建议PEEL Suggestion PEEL|P · 建议 Suggestion|E · 首先／然后／最后 First/Then/Finally|E · 如果这样做 If this is done|L · 总结 Conclusion|口述约 60 秒 ~60 sec",
+          scaffoldHint: { zh: "建议方向：（1）培养一两个核心好友作为「价值观锚点」，让自己在群体压力中有可依靠的声音；（2）建立「拒绝脚本」——事先在心里准备好简短的拒绝句式（如「我妈晚上等我」），让拒绝在关键时刻能脱口而出。效果 → 让同侪压力不再轻易动摇自己的判断。", en: "Suggested approach: (1) cultivate one or two close friends as \"value anchors\" so you have a trusted voice during group pressure; (2) build a \"refusal script\" — prepare short refusal phrases in advance (e.g., \"my mum's waiting for me tonight\") so refusal can be spoken instantly when needed. Effect → peer pressure no longer easily shakes your own judgement." }
         }
       ]
     }
@@ -7277,6 +8481,10 @@ function renderContent(){
   else if(curTab==='suggest')el.innerHTML=suggestHTML();
   else if(curTab==='oral')el.innerHTML=oralHTML();
   if(showPY) applyPinyinDecoration();
+  // Re-wrap mixed-language strings if English is currently hidden
+  if(typeof scheduleWrapMixedEnglish === 'function' && document.body.classList.contains('hide-en')){
+    scheduleWrapMixedEnglish();
+  }
 }
 
 function applyPinyinDecoration(){
@@ -7420,6 +8628,10 @@ document.addEventListener('focusin', function(ev){
   <span id="floatingPyIcon" style="font-size:18px">拼</span>
   <span id="floatingPyLabel" style="color:var(--muted);font-size:11px">拼音 Pinyin: <strong id="floatingPyState" style="color:var(--teal)">ON</strong></span>
 </div>
+<div id="floatingEnToggle" title="切换英文显示 Toggle English" onclick="toggleFloatingEN()" style="position:fixed;bottom:72px;right:20px;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:999px;padding:10px 16px;box-shadow:0 4px 12px rgba(0,0,0,.15);cursor:pointer;display:flex;align-items:center;gap:8px;font-size:16px;font-family:inherit;user-select:none;transition:all .15s">
+  <span id="floatingEnIcon" style="font-size:18px">英</span>
+  <span id="floatingEnLabel" style="color:var(--muted);font-size:11px">英文 English: <strong id="floatingEnState" style="color:var(--teal)">ON</strong></span>
+</div>
 <script>
 function toggleFloatingPY(){
   togglePY();
@@ -7434,11 +8646,38 @@ function toggleFloatingPY(){
     if(cb2) cb2.checked = on;
   }, 50);
 }
+
+function toggleFloatingEN(){
+  // Flip body class
+  var on = document.body.classList.contains('hide-en');  // currently hidden? then will become shown
+  if(on){
+    document.body.classList.remove('hide-en');
+    try{ localStorage.setItem('zb_show_en','1'); }catch(e){}
+  } else {
+    document.body.classList.add('hide-en');
+    try{ localStorage.setItem('zb_show_en','0'); }catch(e){}
+  }
+  // Re-process mixed-language strings (wraps English-looking text in <span.mix-en>)
+  if(typeof wrapMixedEnglish === 'function') wrapMixedEnglish();
+  // Sync header checkbox + floating display
+  setTimeout(function(){
+    var nowOn = !document.body.classList.contains('hide-en');
+    var st = document.getElementById('floatingEnState');
+    if(st){st.textContent = nowOn?'ON':'OFF';st.style.color = nowOn?'var(--teal)':'var(--faint)';}
+    var cb = document.getElementById('enGlobal');
+    if(cb) cb.checked = nowOn;
+  }, 50);
+}
+
 // Initialize state on load
 window.addEventListener('DOMContentLoaded', function(){
   var on = !document.body.classList.contains('nopy');
   var st = document.getElementById('floatingPyState');
   if(st){st.textContent = on?'ON':'OFF';st.style.color = on?'var(--teal)':'var(--faint)';}
+  // Initialize EN floating state
+  var enOn = !document.body.classList.contains('hide-en');
+  var enSt = document.getElementById('floatingEnState');
+  if(enSt){enSt.textContent = enOn?'ON':'OFF';enSt.style.color = enOn?'var(--teal)':'var(--faint)';}
 });
 </script>
 </body>
